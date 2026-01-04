@@ -21,7 +21,7 @@ const CreditCard = () => <span style={{ fontSize: '1.2em' }}>💳</span>;
 const PieChart = () => <span style={{ fontSize: '1.2em' }}>📈</span>;
 const RefreshCw = () => <span style={{ fontSize: '1.2em' }}>🔄</span>;
 
-// API Configuration
+// API Configuratio
 const API_BASE_URL = 'http://localhost:8080/api';
 
 // API Helper Functions
