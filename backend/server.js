@@ -1,4 +1,4 @@
-// Add these to your existing backend/server.js
+// Complete backend/server.js with Expenses Management
 
 const express = require("express");
 const mongoose = require("mongoose");
@@ -10,9 +10,9 @@ require("dotenv").config();
 
 const app = express();
 
-// Enhanced CORS for OAuth
+// Enhanced CORS
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3005', 'http://localhost:3004'],
+  origin: ['http://localhost:3000', 'http://localhost:3005', 'http://localhost:3004', 'http://localhost:8080'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -26,16 +26,17 @@ mongoose
   .then(() => console.log("MongoDB Connected Successfully"))
   .catch((err) => console.error("MongoDB Error:", err));
 
-// Enhanced User Schema with OAuth fields
+// ==================== SCHEMAS ====================
+
+// User Schema
 const UserSchema = new mongoose.Schema({
   firstName: { type: String, required: true },
   lastName: { type: String, required: true },
   email: { type: String, required: true, unique: true, lowercase: true },
-  password: { type: String }, // Optional for OAuth users
+  password: { type: String },
   profilePicture: { type: String },
   updates: { type: Boolean, default: false },
   terms: { type: Boolean, required: true },
-  // OAuth fields
   googleId: { type: String, unique: true, sparse: true },
   facebookId: { type: String, unique: true, sparse: true },
   appleId: { type: String, unique: true, sparse: true },
@@ -47,7 +48,292 @@ const UserSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Expense Schema
+const ExpenseSchema = new mongoose.Schema({
+  userId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User',
+    required: true 
+  },
+  description: { 
+    type: String, 
+    required: true,
+    trim: true
+  },
+  amount: { 
+    type: Number, 
+    required: true,
+    min: 0
+  },
+  category: { 
+    type: String, 
+    required: true,
+    enum: ['food', 'transport', 'utilities', 'entertainment', 'healthcare', 'shopping', 'education', 'other'],
+    default: 'other'
+  },
+  date: { 
+    type: Date, 
+    required: true,
+    default: Date.now
+  },
+  notes: { 
+    type: String,
+    trim: true
+  },
+  createdAt: { 
+    type: Date, 
+    default: Date.now 
+  },
+  updatedAt: { 
+    type: Date, 
+    default: Date.now 
+  }
+});
+
+// Update the updatedAt timestamp on save
+ExpenseSchema.pre('save', function(next) {
+  this.updatedAt = Date.now();
+  next();
+});
+
 const User = mongoose.model("User", UserSchema);
+const Expense = mongoose.model("Expense", ExpenseSchema);
+
+// ==================== MIDDLEWARE ====================
+
+// Authentication Middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Access token required'
+    });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
+    if (err) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Invalid or expired token'
+      });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// ==================== EXPENSE ROUTES ====================
+
+// Get all expenses for authenticated user
+app.get('/api/expenses', authenticateToken, async (req, res) => {
+  try {
+    const expenses = await Expense.find({ userId: req.user.userId })
+      .sort({ date: -1, createdAt: -1 });
+    
+    res.json(expenses);
+  } catch (error) {
+    console.error('Get Expenses Error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error fetching expenses',
+      error: error.message
+    });
+  }
+});
+
+// Get single expense
+app.get('/api/expenses/:id', authenticateToken, async (req, res) => {
+  try {
+    const expense = await Expense.findOne({
+      _id: req.params.id,
+      userId: req.user.userId
+    });
+
+    if (!expense) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Expense not found'
+      });
+    }
+
+    res.json(expense);
+  } catch (error) {
+    console.error('Get Expense Error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error fetching expense',
+      error: error.message
+    });
+  }
+});
+
+// Create new expense
+app.post('/api/expenses', authenticateToken, async (req, res) => {
+  try {
+    const { description, amount, category, date, notes } = req.body;
+
+    // Validation
+    if (!description || !amount || !category || !date) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Description, amount, category, and date are required'
+      });
+    }
+
+    if (amount <= 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Amount must be greater than 0'
+      });
+    }
+
+    const expense = await Expense.create({
+      userId: req.user.userId,
+      description,
+      amount: parseFloat(amount),
+      category,
+      date: new Date(date),
+      notes: notes || ''
+    });
+
+    res.status(201).json(expense);
+  } catch (error) {
+    console.error('Create Expense Error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error creating expense',
+      error: error.message
+    });
+  }
+});
+
+// Update expense
+app.put('/api/expenses/:id', authenticateToken, async (req, res) => {
+  try {
+    const { description, amount, category, date, notes } = req.body;
+
+    // Find and verify ownership
+    const expense = await Expense.findOne({
+      _id: req.params.id,
+      userId: req.user.userId
+    });
+
+    if (!expense) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Expense not found'
+      });
+    }
+
+    // Update fields
+    if (description !== undefined) expense.description = description;
+    if (amount !== undefined) {
+      if (amount <= 0) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Amount must be greater than 0'
+        });
+      }
+      expense.amount = parseFloat(amount);
+    }
+    if (category !== undefined) expense.category = category;
+    if (date !== undefined) expense.date = new Date(date);
+    if (notes !== undefined) expense.notes = notes;
+
+    await expense.save();
+
+    res.json(expense);
+  } catch (error) {
+    console.error('Update Expense Error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error updating expense',
+      error: error.message
+    });
+  }
+});
+
+// Delete expense
+app.delete('/api/expenses/:id', authenticateToken, async (req, res) => {
+  try {
+    const expense = await Expense.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.user.userId
+    });
+
+    if (!expense) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Expense not found'
+      });
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Expense deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete Expense Error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error deleting expense',
+      error: error.message
+    });
+  }
+});
+
+// Get expense statistics
+app.get('/api/expenses/stats/summary', authenticateToken, async (req, res) => {
+  try {
+    const { startDate, endDate, category } = req.query;
+    
+    // Build query
+    const query = { userId: req.user.userId };
+    
+    if (startDate || endDate) {
+      query.date = {};
+      if (startDate) query.date.$gte = new Date(startDate);
+      if (endDate) query.date.$lte = new Date(endDate);
+    }
+    
+    if (category && category !== 'all') {
+      query.category = category;
+    }
+
+    const expenses = await Expense.find(query);
+    
+    // Calculate statistics
+    const total = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const count = expenses.length;
+    const average = count > 0 ? total / count : 0;
+    
+    // Category breakdown
+    const byCategory = {};
+    expenses.forEach(exp => {
+      if (!byCategory[exp.category]) {
+        byCategory[exp.category] = 0;
+      }
+      byCategory[exp.category] += exp.amount;
+    });
+
+    res.json({
+      total,
+      count,
+      average,
+      byCategory
+    });
+  } catch (error) {
+    console.error('Get Stats Error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error fetching statistics',
+      error: error.message
+    });
+  }
+});
 
 // ==================== OAUTH ROUTES ====================
 
@@ -56,25 +342,21 @@ app.post('/api/auth/google', async (req, res) => {
   try {
     const { token } = req.body;
 
-    // Verify Google token
     const response = await axios.get(
       `https://oauth2.googleapis.com/tokeninfo?id_token=${token}`
     );
 
     const { email, given_name, family_name, picture, sub: googleId } = response.data;
 
-    // Check if user exists
     let user = await User.findOne({ $or: [{ email }, { googleId }] });
 
     if (user) {
-      // Update Google ID if not set
       if (!user.googleId) {
         user.googleId = googleId;
         user.authProvider = 'google';
         await user.save();
       }
     } else {
-      // Create new user
       user = await User.create({
         firstName: given_name,
         lastName: family_name,
@@ -82,11 +364,10 @@ app.post('/api/auth/google', async (req, res) => {
         googleId,
         profilePicture: picture,
         authProvider: 'google',
-        terms: true // Automatically accepted via OAuth
+        terms: true
       });
     }
 
-    // Generate JWT
     const jwtToken = jwt.sign(
       { userId: user._id, email: user.email },
       process.env.JWT_SECRET || 'your-secret-key',
@@ -123,25 +404,21 @@ app.post('/api/auth/facebook', async (req, res) => {
   try {
     const { accessToken } = req.body;
 
-    // Verify Facebook token and get user info
     const response = await axios.get(
       `https://graph.facebook.com/me?fields=id,first_name,last_name,email,picture&access_token=${accessToken}`
     );
 
     const { id: facebookId, first_name, last_name, email, picture } = response.data;
 
-    // Check if user exists
     let user = await User.findOne({ $or: [{ email }, { facebookId }] });
 
     if (user) {
-      // Update Facebook ID if not set
       if (!user.facebookId) {
         user.facebookId = facebookId;
         user.authProvider = 'facebook';
         await user.save();
       }
     } else {
-      // Create new user
       user = await User.create({
         firstName: first_name,
         lastName: last_name,
@@ -153,7 +430,6 @@ app.post('/api/auth/facebook', async (req, res) => {
       });
     }
 
-    // Generate JWT
     const token = jwt.sign(
       { userId: user._id, email: user.email },
       process.env.JWT_SECRET || 'your-secret-key',
@@ -190,22 +466,18 @@ app.post('/api/auth/apple', async (req, res) => {
   try {
     const { identityToken, user } = req.body;
 
-    // Decode Apple identity token (simplified - in production use proper verification)
     const decoded = jwt.decode(identityToken);
     const { sub: appleId, email } = decoded;
 
-    // Check if user exists
     let existingUser = await User.findOne({ $or: [{ email }, { appleId }] });
 
     if (existingUser) {
-      // Update Apple ID if not set
       if (!existingUser.appleId) {
         existingUser.appleId = appleId;
         existingUser.authProvider = 'apple';
         await existingUser.save();
       }
     } else {
-      // Create new user
       const firstName = user?.name?.firstName || 'Apple';
       const lastName = user?.name?.lastName || 'User';
       
@@ -219,7 +491,6 @@ app.post('/api/auth/apple', async (req, res) => {
       });
     }
 
-    // Generate JWT
     const token = jwt.sign(
       { userId: existingUser._id, email: existingUser.email },
       process.env.JWT_SECRET || 'your-secret-key',
@@ -250,6 +521,8 @@ app.post('/api/auth/apple', async (req, res) => {
   }
 });
 
+// ==================== USER ROUTES ====================
+
 // Health Check
 app.get('/api/health', (req, res) => {
   res.json({ 
@@ -259,7 +532,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Regular Registration (existing endpoint)
+// Register
 app.post('/api/users/register', async (req, res) => {
   try {
     const { firstName, lastName, email, password, updates, terms } = req.body;
@@ -322,7 +595,7 @@ app.post('/api/users/register', async (req, res) => {
   }
 });
 
-// Login (existing endpoint)
+// Login
 app.post('/api/users/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -421,11 +694,20 @@ app.get('/api/stats', async (req, res) => {
 });
 
 // Start Server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
   console.log('=================================');
-  console.log('Server running on port ' + PORT);
-  console.log('API: http://localhost:' + PORT + '/api');
-  console.log('OAuth endpoints enabled');
+  console.log('FinShield API Server');
+  console.log('=================================');
+  console.log('Server: http://localhost:' + PORT);
+  console.log('Health: http://localhost:' + PORT + '/api/health');
+  console.log('');
+  console.log('Available Endpoints:');
+  console.log('- POST /api/users/register');
+  console.log('- POST /api/users/login');
+  console.log('- GET  /api/expenses');
+  console.log('- POST /api/expenses');
+  console.log('- PUT  /api/expenses/:id');
+  console.log('- DELETE /api/expenses/:id');
   console.log('=================================');
 });

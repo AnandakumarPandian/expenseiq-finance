@@ -13,4 +13,4 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'success', message: 'CORS test working' });
 });
 
-app.listen(5000, () => console.log('Test server on 5000'));
+app.listen(8000, () => console.log('Test server on 5000'));

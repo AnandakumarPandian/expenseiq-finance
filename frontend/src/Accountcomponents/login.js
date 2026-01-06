@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 
 //const API_URL = 'http://localhost:5000/api';
-const API_URL = 'http://localhost:8080/api';
+const API_URL = 'http://localhost:8000/api';
 
 // ==================== OAUTH CONFIGURATION ====================
 // Replace these with your actual OAuth credentials

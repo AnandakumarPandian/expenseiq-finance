@@ -22,7 +22,7 @@ const PieChart = () => <span style={{ fontSize: '1.2em' }}>📈</span>;
 const RefreshCw = () => <span style={{ fontSize: '1.2em' }}>🔄</span>;
 
 // API Configuratio
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = 'http://localhost:8000/api';
 
 // API Helper Functions
 const api = {
