@@ -136,9 +136,6 @@ const api = {
 
   expenses: {
     getAll: () => api.request('/expenses'),
-    create: (data) => api.request('/expenses', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id, data) => api.request(`/expenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    delete: (id) => api.request(`/expenses/${id}`, { method: 'DELETE' }),
   },
 };
 
@@ -361,17 +358,7 @@ const ExpensesTracker = ({ setCurrentPage }) => {
   const trendData = getTrendData();
 
   const renderPlaceholderView = (viewName) => (
-    <div className="flex items-center justify-center h-96">
-      <div className="text-center">
-        <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-slate-700 to-slate-800 rounded-2xl flex items-center justify-center">
-          <svg className="w-12 h-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
-          </svg>
-        </div>
-        <h2 className="text-2xl font-bold text-slate-700 mb-2">{viewName}</h2>
-        <p className="text-slate-500">This feature is under development</p>
-      </div>
-    </div>
+    setCurrentPage('menu')
   );
 
   return (
@@ -489,7 +476,7 @@ const ExpensesTracker = ({ setCurrentPage }) => {
 
         {/* Content */}
         <div className="flex-1 p-6 overflow-auto">
-          {currentView === 'dashboard' && setCurrentPage('dashboard')}
+          {currentView === 'dashboard' && renderPlaceholderView('Dashboard')}
           {currentView === 'analytics' && renderPlaceholderView('Analytics')}
           {currentView === 'budgets' && renderPlaceholderView('Budgets')}
           {currentView === 'cards' && renderPlaceholderView('Cards')}

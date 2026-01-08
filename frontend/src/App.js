@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Login from './Accountcomponents/login';
 import Signup from './Accountcomponents/signup';
 import Menu from './Menucomponents/menu';
-
+import Dashboard from './Menucomponents/dashboard';
 function App() {
   const [currentPage, setCurrentPage] = useState('login');
   const [isLoading, setIsLoading] = useState(true);
@@ -41,6 +41,7 @@ function App() {
       {currentPage === 'login' && <Login setCurrentPage={setCurrentPage} />}
       {currentPage === 'signup' && <Signup setCurrentPage={setCurrentPage} />}
       {currentPage === 'menu' && <Menu setCurrentPage={setCurrentPage} />}
+      {currentPage === 'dashboard' && <Dashboard setCurrentPage={setCurrentPage} />}
     </div>
   );
 }
