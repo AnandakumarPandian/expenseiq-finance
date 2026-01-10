@@ -63,36 +63,6 @@ const LogOut = () => (
   </svg>
 );
 
-const Plus = () => (
-  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/>
-  </svg>
-);
-
-const Download = () => (
-  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-  </svg>
-);
-
-const Edit = () => (
-  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-  </svg>
-);
-
-const Trash = () => (
-  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-  </svg>
-);
-
-const Filter = () => (
-  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-  </svg>
-);
-
 const Refresh = () => (
   <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -139,25 +109,13 @@ const api = {
   },
 };
 
-const ExpensesTracker = ({ setCurrentPage }) => {
+const Dashboard = ({ setCurrentPage }) => {
   const [expenses, setExpenses] = useState([]);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [filterCategory, setFilterCategory] = useState('all');
-  const [filterPeriod, setFilterPeriod] = useState('all');
-  const [editingId, setEditingId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [currentView, setCurrentView] = useState('expenses');
+  const [currentView, setCurrentView] = useState('dashboard');
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
-  const [formData, setFormData] = useState({
-    description: '',
-    amount: '',
-    category: 'food',
-    date: new Date().toISOString().split('T')[0],
-    notes: ''
-  });
 
   const categories = [
     { value: 'food', label: 'Food & Dining', color: '#3b82f6', icon: '🍽️' },
@@ -216,95 +174,20 @@ const ExpensesTracker = ({ setCurrentPage }) => {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!formData.description || !formData.amount || !formData.date) {
-      alert('Please fill in all required fields');
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      const expenseData = {
-        description: formData.description,
-        amount: parseFloat(formData.amount),
-        category: formData.category,
-        date: formData.date,
-        notes: formData.notes
-      };
-
-      if (editingId) {
-        await api.expenses.update(editingId, expenseData);
-      } else {
-        await api.expenses.create(expenseData);
-      }
-      
-      await loadExpenses();
-      setFormData({ description: '', amount: '', category: 'food', date: new Date().toISOString().split('T')[0], notes: '' });
-      setShowAddForm(false);
-      setEditingId(null);
-    } catch (error) {
-      setError(error.message || 'Failed to save expense');
-    } finally {
-      setLoading(false);
+  const handleViewChange = (viewId) => {
+    if (viewId === 'expenses') {
+      setCurrentPage('menu');
+    } else {
+      setCurrentView(viewId);
+      setSidebarOpen(false);
     }
   };
 
-  const handleEdit = (expense) => {
-    setFormData({
-      description: expense.description,
-      amount: expense.amount.toString(),
-      category: expense.category,
-      date: new Date(expense.date).toISOString().split('T')[0],
-      notes: expense.notes || ''
-    });
-    setEditingId(expense._id);
-    setShowAddForm(true);
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this expense?')) return;
-    
-    setLoading(true);
-    try {
-      await api.expenses.delete(id);
-      await loadExpenses();
-    } catch (error) {
-      setError(error.message || 'Failed to delete expense');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getFilteredExpenses = () => {
-    let filtered = [...expenses];
-    
-    if (filterCategory !== 'all') {
-      filtered = filtered.filter(exp => exp.category === filterCategory);
-    }
-    
-    if (filterPeriod !== 'all') {
-      const now = new Date();
-      filtered = filtered.filter(exp => {
-        const date = new Date(exp.date);
-        switch (filterPeriod) {
-          case 'today': return date.toDateString() === now.toDateString();
-          case 'week': return date >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          case 'month': return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-          case 'year': return date.getFullYear() === now.getFullYear();
-          default: return true;
-        }
-      });
-    }
-    
-    return filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
-  };
-
-  const filteredExpenses = getFilteredExpenses();
-  const totalExpenses = filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
   const getCategoryData = () => {
     const categoryTotals = {};
-    filteredExpenses.forEach(exp => {
+    expenses.forEach(exp => {
       categoryTotals[exp.category] = (categoryTotals[exp.category] || 0) + exp.amount;
     });
     
@@ -320,7 +203,7 @@ const ExpensesTracker = ({ setCurrentPage }) => {
 
   const getTrendData = () => {
     const dailyTotals = {};
-    filteredExpenses.forEach(exp => {
+    expenses.forEach(exp => {
       const date = new Date(exp.date).toISOString().split('T')[0];
       dailyTotals[date] = (dailyTotals[date] || 0) + exp.amount;
     });
@@ -335,30 +218,22 @@ const ExpensesTracker = ({ setCurrentPage }) => {
     }));
   };
 
-  const exportToCSV = () => {
-    const headers = ['Date', 'Description', 'Category', 'Amount', 'Notes'];
-    const rows = filteredExpenses.map(exp => [
-      new Date(exp.date).toISOString().split('T')[0],
-      exp.description,
-      categories.find(c => c.value === exp.category)?.label,
-      exp.amount,
-      exp.notes || ''
-    ]);
-    
-    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `finshield-expenses-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-  };
-
   const categoryData = getCategoryData();
   const trendData = getTrendData();
+  const recentExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
 
   const renderPlaceholderView = (viewName) => (
-    setCurrentPage('menu')
+    <div className="flex items-center justify-center h-96">
+      <div className="text-center">
+        <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-slate-700 to-slate-800 rounded-2xl flex items-center justify-center">
+          <svg className="w-12 h-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+          </svg>
+        </div>
+        <h2 className="text-2xl font-bold text-slate-700 mb-2">{viewName}</h2>
+        <p className="text-slate-500">This feature is under development</p>
+      </div>
+    </div>
   );
 
   return (
@@ -383,7 +258,6 @@ const ExpensesTracker = ({ setCurrentPage }) => {
 
       {/* Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transform transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static`}>
-        {/* Logo */}
         <div className="h-16 px-6 flex items-center justify-between border-b border-slate-200">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg flex items-center justify-center">
@@ -398,7 +272,6 @@ const ExpensesTracker = ({ setCurrentPage }) => {
           </button>
         </div>
 
-        {/* User Info */}
         {userData && (
           <div className="p-4 border-b border-slate-200">
             <div className="flex items-center gap-3">
@@ -413,13 +286,12 @@ const ExpensesTracker = ({ setCurrentPage }) => {
           </div>
         )}
 
-        {/* Navigation */}
         <nav className="p-3 flex-1">
           <div className="space-y-1">
             {menuItems.map((item) => (
               <button
                 key={item.id}
-                onClick={() => { setCurrentView(item.id); setSidebarOpen(false); }}
+                onClick={() => handleViewChange(item.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   currentView === item.id
                     ? 'bg-slate-900 text-white'
@@ -433,7 +305,6 @@ const ExpensesTracker = ({ setCurrentPage }) => {
           </div>
         </nav>
 
-        {/* Logout */}
         <div className="p-3 border-t border-slate-200">
           <button
             onClick={handleLogout}
@@ -445,14 +316,11 @@ const ExpensesTracker = ({ setCurrentPage }) => {
         </div>
       </div>
 
-      {/* Overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/20 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-screen">
-        {/* Header */}
         <div className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-30">
           <div className="flex items-center gap-4">
             <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-slate-600 hover:text-slate-900">
@@ -474,18 +342,15 @@ const ExpensesTracker = ({ setCurrentPage }) => {
           </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 p-6 overflow-auto">
-          {currentView === 'dashboard' && renderPlaceholderView('Dashboard')}
           {currentView === 'analytics' && renderPlaceholderView('Analytics')}
           {currentView === 'budgets' && renderPlaceholderView('Budgets')}
           {currentView === 'cards' && renderPlaceholderView('Cards')}
           {currentView === 'profile' && renderPlaceholderView('Profile')}
           {currentView === 'settings' && renderPlaceholderView('Settings')}
           
-          {currentView === 'expenses' && (
+          {currentView === 'dashboard' && (
             <div className="max-w-7xl mx-auto space-y-6">
-              {/* Stats */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
                   <div className="flex items-center justify-between mb-3">
@@ -495,7 +360,7 @@ const ExpensesTracker = ({ setCurrentPage }) => {
                     </div>
                   </div>
                   <div className="text-3xl font-bold text-slate-900">₹{totalExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                  <p className="text-xs text-slate-500 mt-2">Current period spending</p>
+                  <p className="text-xs text-slate-500 mt-2">All time spending</p>
                 </div>
                 
                 <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
@@ -505,7 +370,7 @@ const ExpensesTracker = ({ setCurrentPage }) => {
                       <Receipt />
                     </div>
                   </div>
-                  <div className="text-3xl font-bold text-slate-900">{filteredExpenses.length}</div>
+                  <div className="text-3xl font-bold text-slate-900">{expenses.length}</div>
                   <p className="text-xs text-slate-500 mt-2">Total recorded transactions</p>
                 </div>
                 
@@ -517,14 +382,13 @@ const ExpensesTracker = ({ setCurrentPage }) => {
                     </div>
                   </div>
                   <div className="text-3xl font-bold text-slate-900">
-                    ₹{filteredExpenses.length > 0 ? (totalExpenses / filteredExpenses.length).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
+                    ₹{expenses.length > 0 ? (totalExpenses / expenses.length).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
                   </div>
                   <p className="text-xs text-slate-500 mt-2">Per transaction average</p>
                 </div>
               </div>
 
-              {/* Charts */}
-              {filteredExpenses.length > 0 && (
+              {expenses.length > 0 && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
                     <h3 className="text-lg font-semibold text-slate-900 mb-4">Category Breakdown</h3>
@@ -576,134 +440,9 @@ const ExpensesTracker = ({ setCurrentPage }) => {
                 </div>
               )}
 
-              {/* Controls */}
-              <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
-                <div className="flex flex-wrap gap-4 items-center justify-between">
-                  <div className="flex flex-wrap gap-3">
-                    <div className="flex items-center gap-2">
-                      <Filter />
-                      <select
-                        value={filterCategory}
-                        onChange={(e) => setFilterCategory(e.target.value)}
-                        className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-                      >
-                        <option value="all">All Categories</option>
-                        {categories.map(cat => (
-                          <option key={cat.value} value={cat.value}>{cat.icon} {cat.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <select
-                      value={filterPeriod}
-                      onChange={(e) => setFilterPeriod(e.target.value)}
-                      className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-                    >
-                      <option value="all">All Time</option>
-                      <option value="today">Today</option>
-                      <option value="week">This Week</option>
-                      <option value="month">This Month</option>
-                      <option value="year">This Year</option>
-                    </select>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={exportToCSV}
-                      disabled={filteredExpenses.length === 0}
-                      className="flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Download />
-                      Export CSV
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowAddForm(!showAddForm);
-                        setEditingId(null);
-                        setFormData({ description: '', amount: '', category: 'food', date: new Date().toISOString().split('T')[0], notes: '' });
-                      }}
-                      className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
-                    >
-                      <Plus />
-                      Add Expense
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Form */}
-              {showAddForm && (
-                <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
-                  <h3 className="text-lg font-semibold text-slate-900 mb-4">
-                    {editingId ? 'Edit Expense' : 'Add New Expense'}
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input
-                      type="text"
-                      placeholder="Description"
-                      value={formData.description}
-                      onChange={(e) => setFormData({...formData, description: e.target.value})}
-                      className="border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-                    />
-                    
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="Amount (₹)"
-                      value={formData.amount}
-                      onChange={(e) => setFormData({...formData, amount: e.target.value})}
-                      className="border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-                    />
-                    
-                    <select
-                      value={formData.category}
-                      onChange={(e) => setFormData({...formData, category: e.target.value})}
-                      className="border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-                    >
-                      {categories.map(cat => (
-                        <option key={cat.value} value={cat.value}>{cat.icon} {cat.label}</option>
-                      ))}
-                    </select>
-                    
-                    <input
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) => setFormData({...formData, date: e.target.value})}
-                      className="border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-                    />
-                    
-                    <input
-                      type="text"
-                      placeholder="Notes (optional)"
-                      value={formData.notes}
-                      onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                      className="border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent md:col-span-2"
-                    />
-                    
-                    <div className="md:col-span-2 flex gap-3">
-                      <button
-                        onClick={handleSubmit}
-                        disabled={loading}
-                        className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
-                      >
-                        {loading ? 'Saving...' : editingId ? 'Update Expense' : 'Add Expense'}
-                      </button>
-                      <button
-                        onClick={() => { setShowAddForm(false); setEditingId(null); }}
-                        disabled={loading}
-                        className="bg-white border border-slate-300 text-slate-700 px-6 py-2 rounded-lg font-medium hover:bg-slate-50 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Expenses Table */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-200">
-                  <h3 className="text-lg font-semibold text-slate-900">Transaction History</h3>
+                  <h3 className="text-lg font-semibold text-slate-900">Recent Transactions</h3>
                 </div>
                 
                 <div className="overflow-x-auto">
@@ -712,7 +451,7 @@ const ExpensesTracker = ({ setCurrentPage }) => {
                       <div className="animate-spin mx-auto mb-4"><Refresh /></div>
                       <p>Loading expenses...</p>
                     </div>
-                  ) : filteredExpenses.length === 0 ? (
+                  ) : recentExpenses.length === 0 ? (
                     <div className="p-12 text-center text-slate-500">
                       <div className="w-16 h-16 mx-auto mb-4 bg-slate-100 rounded-full flex items-center justify-center">
                         <Receipt />
@@ -728,11 +467,10 @@ const ExpensesTracker = ({ setCurrentPage }) => {
                           <th className="text-left px-6 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Description</th>
                           <th className="text-left px-6 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Category</th>
                           <th className="text-right px-6 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Amount</th>
-                          <th className="text-right px-6 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
-                        {filteredExpenses.map((expense) => {
+                        {recentExpenses.map((expense) => {
                           const cat = categories.find(c => c.value === expense.category);
                           return (
                             <tr key={expense._id} className="hover:bg-slate-50 transition-colors">
@@ -757,24 +495,6 @@ const ExpensesTracker = ({ setCurrentPage }) => {
                               <td className="px-6 py-4 text-right text-sm font-semibold text-slate-900">
                                 ₹{expense.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                               </td>
-                              <td className="px-6 py-4 text-right">
-                                <div className="flex gap-2 justify-end">
-                                  <button
-                                    onClick={() => handleEdit(expense)}
-                                    disabled={loading}
-                                    className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors disabled:opacity-50"
-                                  >
-                                    <Edit />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(expense._id)}
-                                    disabled={loading}
-                                    className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-                                  >
-                                    <Trash />
-                                  </button>
-                                </div>
-                              </td>
                             </tr>
                           );
                         })}
@@ -791,4 +511,4 @@ const ExpensesTracker = ({ setCurrentPage }) => {
   );
 };
 
-export default ExpensesTracker;
+export default Dashboard;

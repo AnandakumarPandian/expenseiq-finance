@@ -4,6 +4,8 @@ import Login from './Accountcomponents/login';
 import Signup from './Accountcomponents/signup';
 import Menu from './Menucomponents/menu';
 import Dashboard from './Menucomponents/dashboard';
+import Analytics from './Menucomponents/analytics';
+
 function App() {
   const [currentPage, setCurrentPage] = useState('login');
   const [isLoading, setIsLoading] = useState(true);
@@ -42,6 +44,7 @@ function App() {
       {currentPage === 'signup' && <Signup setCurrentPage={setCurrentPage} />}
       {currentPage === 'menu' && <Menu setCurrentPage={setCurrentPage} />}
       {currentPage === 'dashboard' && <Dashboard setCurrentPage={setCurrentPage} />}
+      {currentPage === 'analytics' && <Analytics setCurrentPage={setCurrentPage} />}
     </div>
   );
 }

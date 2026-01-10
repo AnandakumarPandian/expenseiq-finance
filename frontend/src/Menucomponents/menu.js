@@ -305,7 +305,7 @@ const ExpensesTracker = ({ setCurrentPage }) => {
   const filteredExpenses = getFilteredExpenses();
   const totalExpenses = filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
 
-  const getCategoryData = () => {
+  /*const getCategoryData = () => {
     const categoryTotals = {};
     filteredExpenses.forEach(exp => {
       categoryTotals[exp.category] = (categoryTotals[exp.category] || 0) + exp.amount;
@@ -319,9 +319,9 @@ const ExpensesTracker = ({ setCurrentPage }) => {
       color: categories.find(c => c.value === category)?.color || '#6b7280',
       icon: categories.find(c => c.value === category)?.icon || '📋'
     }));
-  };
+  };*/
 
-  const getTrendData = () => {
+  /*const getTrendData = () => {
     const dailyTotals = {};
     filteredExpenses.forEach(exp => {
       const date = new Date(exp.date).toISOString().split('T')[0];
@@ -336,7 +336,7 @@ const ExpensesTracker = ({ setCurrentPage }) => {
       amount,
       height: maxAmount > 0 ? (amount / maxAmount) * 100 : 0
     }));
-  };
+  };*/
 
   const exportToCSV = () => {
     const headers = ['Date', 'Description', 'Category', 'Amount', 'Notes'];
@@ -357,8 +357,8 @@ const ExpensesTracker = ({ setCurrentPage }) => {
     a.click();
   };
 
-  const categoryData = getCategoryData();
-  const trendData = getTrendData();
+  //const categoryData = getCategoryData();
+  //const trendData = getTrendData();
 
   const renderPlaceholderView = (viewName) => (
     <div className="flex items-center justify-center h-96">
@@ -490,7 +490,7 @@ const ExpensesTracker = ({ setCurrentPage }) => {
         {/* Content */}
         <div className="flex-1 p-6 overflow-auto">
           {currentView === 'dashboard' && setCurrentPage('dashboard')}
-          {currentView === 'analytics' && renderPlaceholderView('Analytics')}
+          {currentView === 'analytics' && setCurrentPage('analytics')}
           {currentView === 'budgets' && renderPlaceholderView('Budgets')}
           {currentView === 'cards' && renderPlaceholderView('Cards')}
           {currentView === 'profile' && renderPlaceholderView('Profile')}
@@ -537,7 +537,7 @@ const ExpensesTracker = ({ setCurrentPage }) => {
               </div>
 
               {/* Charts */}
-              {filteredExpenses.length > 0 && (
+              {/*{filteredExpenses.length > 0 && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
                     <h3 className="text-lg font-semibold text-slate-900 mb-4">Category Breakdown</h3>
@@ -587,7 +587,7 @@ const ExpensesTracker = ({ setCurrentPage }) => {
                     </div>
                   </div>
                 </div>
-              )}
+              )*/}
 
               {/* Controls */}
               <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
