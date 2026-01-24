@@ -238,118 +238,13 @@ const Dashboard = ({ setCurrentPage }) => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      {/* Error Toast */}
-      {error && (
-        <div className="fixed top-4 right-4 z-50 bg-white border-l-4 border-red-500 px-6 py-4 rounded-lg shadow-xl flex items-start gap-3 max-w-md">
-          <div className="flex-shrink-0 w-6 h-6 bg-red-100 rounded-full flex items-center justify-center">
-            <svg className="w-4 h-4 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"/>
-            </svg>
-          </div>
-          <div className="flex-1">
-            <p className="font-semibold text-slate-900">Error</p>
-            <p className="text-sm text-slate-600">{error}</p>
-          </div>
-          <button onClick={() => setError(null)} className="text-slate-400 hover:text-slate-600">
-            <X />
-          </button>
-        </div>
-      )}
-
-      {/* Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transform transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static`}>
-        <div className="h-16 px-6 flex items-center justify-between border-b border-slate-200">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-              </svg>
-            </div>
-            <span className="text-lg font-bold text-slate-900">FinShield</span>
-          </div>
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-600 hover:text-slate-900">
-            <X />
-          </button>
-        </div>
-
-        {userData && (
-          <div className="p-4 border-b border-slate-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-slate-700 to-slate-900 rounded-lg flex items-center justify-center text-white font-semibold text-sm">
-                {userData.firstName?.charAt(0)}{userData.lastName?.charAt(0)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-900 truncate">{userData.firstName} {userData.lastName}</p>
-                <p className="text-xs text-slate-500 truncate">{userData.email}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <nav className="p-3 flex-1">
-          <div className="space-y-1">
-            {menuItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => handleViewChange(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  currentView === item.id
-                    ? 'bg-slate-900 text-white'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`}
-              >
-                {item.icon}
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </nav>
-
-        <div className="p-3 border-t border-slate-200">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
-          >
-            <LogOut />
-            <span>Logout</span>
-          </button>
-        </div>
-      </div>
-
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/20 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
-      )}
+     
 
       <div className="flex-1 flex flex-col min-h-screen">
-        <div className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-30">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-slate-600 hover:text-slate-900">
-              <Menu />
-            </button>
-            <h1 className="text-xl font-bold text-slate-900 capitalize">{currentView}</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={loadExpenses}
-              disabled={loading}
-              className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
-            >
-              <Refresh />
-            </button>
-            <div className="hidden sm:block text-sm text-slate-500">
-              {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </div>
-          </div>
-        </div>
+        
 
         <div className="flex-1 p-6 overflow-auto">
-          {currentView === 'analytics' && renderPlaceholderView('Analytics')}
-          {currentView === 'budgets' && renderPlaceholderView('Budgets')}
-          {currentView === 'cards' && renderPlaceholderView('Cards')}
-          {currentView === 'profile' && renderPlaceholderView('Profile')}
-          {currentView === 'settings' && renderPlaceholderView('Settings')}
           
-          {currentView === 'dashboard' && (
             <div className="max-w-7xl mx-auto space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
@@ -504,7 +399,7 @@ const Dashboard = ({ setCurrentPage }) => {
                 </div>
               </div>
             </div>
-          )}
+          
         </div>
       </div>
     </div>

@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import Analytics from './analytics';
+import Budget from './budget';
+
+import Dashboard from './dashboard';
 
 // Professional Icon Components
 const Menu = () => (
@@ -489,9 +493,11 @@ const ExpensesTracker = ({ setCurrentPage }) => {
 
         {/* Content */}
         <div className="flex-1 p-6 overflow-auto">
-          {currentView === 'dashboard' && setCurrentPage('dashboard')}
-          {currentView === 'analytics' && setCurrentPage('analytics')}
-          {currentView === 'budgets' && renderPlaceholderView('Budgets')}
+          {currentView === 'dashboard' && <Dashboard expenses={expenses} />}
+          {/*{currentView === 'analytics' && setCurrentPage('analytics')}
+          {currentView === 'budgets' && setCurrentPage('budgets')}*/}
+          {currentView === 'analytics' && <Analytics expenses={expenses} />}
+          {currentView === 'budgets' && <Budget expenses={expenses} />}
           {currentView === 'cards' && renderPlaceholderView('Cards')}
           {currentView === 'profile' && renderPlaceholderView('Profile')}
           {currentView === 'settings' && renderPlaceholderView('Settings')}

@@ -1,7 +1,5 @@
+import React, { useState } from 'react';
 
-import React, { useState, useEffect } from 'react';
-
-// Icon Components
 const TrendingUp = () => (
   <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
@@ -27,36 +25,6 @@ const Calendar = () => (
   </svg>
 );
 
-const Plus = () => (
-  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/>
-  </svg>
-);
-
-const Edit = () => (
-  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-  </svg>
-);
-
-const Trash = () => (
-  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-  </svg>
-);
-
-const AlertCircle = () => (
-  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-  </svg>
-);
-
-const CheckCircle = () => (
-  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-  </svg>
-);
-
 const categories = [
   { value: 'food', label: 'Food & Dining', color: '#3b82f6', icon: '🍽️' },
   { value: 'transport', label: 'Transportation', color: '#10b981', icon: '🚗' },
@@ -68,8 +36,9 @@ const categories = [
   { value: 'other', label: 'Other', color: '#6b7280', icon: '📋' }
 ];
 
+
 // Analytics Component
-export const Analytics = ({ expenses }) => {
+const Analytics = ({ expenses = [] }) => {
   const [timePeriod, setTimePeriod] = useState('month');
   
   const getFilteredExpenses = () => {
@@ -114,7 +83,9 @@ export const Analytics = ({ expenses }) => {
       dailyTotals[date] = (dailyTotals[date] || 0) + exp.amount;
     });
     
-    const sorted = Object.entries(dailyTotals).sort(([a], [b]) => new Date(a) - new Date(b)).slice(-30);
+    const sorted = Object.entries(dailyTotals)
+      .sort(([a], [b]) => new Date(a) - new Date(b))
+      .slice(-30);
     const maxAmount = Math.max(...sorted.map(([, amount]) => amount), 1);
     
     return sorted.map(([date, amount]) => ({
@@ -144,12 +115,11 @@ export const Analytics = ({ expenses }) => {
   const categoryData = getCategoryData();
   const trendData = getTrendData();
   const monthlyComparison = getMonthlyComparison();
-  const avgDaily = filteredExpenses.length > 0 ? totalExpenses / Math.max(trendData.length, 1) : 0;
+  const avgDaily = trendData.length > 0 ? totalExpenses / trendData.length : 0;
   const topCategory = categoryData[0];
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Analytics</h2>
@@ -167,7 +137,6 @@ export const Analytics = ({ expenses }) => {
         </select>
       </div>
 
-      {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-3">
@@ -218,9 +187,7 @@ export const Analytics = ({ expenses }) => {
         </div>
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Category Breakdown */}
         <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-slate-900">Category Breakdown</h3>
@@ -256,7 +223,6 @@ export const Analytics = ({ expenses }) => {
           )}
         </div>
 
-        {/* Spending Trend */}
         <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-slate-900">Spending Trend</h3>
@@ -291,7 +257,6 @@ export const Analytics = ({ expenses }) => {
         </div>
       </div>
 
-      {/* Monthly Breakdown */}
       <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
         <h3 className="text-lg font-semibold text-slate-900 mb-4">Month-over-Month Comparison</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -312,3 +277,5 @@ export const Analytics = ({ expenses }) => {
     </div>
   );
 };
+
+export default Analytics;
