@@ -109,6 +109,24 @@ const BarChart = () => (
   </svg>
 );
 
+const Bot = () => (
+  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+  </svg>
+);
+
+const Send = () => (
+  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+  </svg>
+);
+
+const Shield = () => (
+  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+  </svg>
+);
+
 const API_BASE_URL = 'http://localhost:8000/api';
 
 const api = {
@@ -155,6 +173,19 @@ const ExpensesTracker = ({ setCurrentPage }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentView, setCurrentView] = useState('expenses');
   const [userData, setUserData] = useState(null);
+  
+  // Chatbot states
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState([
+    {
+      role: 'assistant',
+      content: 'Welcome to FinShield! 🛡️ I\'m your financial assistant. I can help you with expense tracking, budgeting tips, spending analysis, and more. How can I assist you today?',
+      timestamp: new Date()
+    }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatMessagesEndRef = React.useRef(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
@@ -214,6 +245,246 @@ const ExpensesTracker = ({ setCurrentPage }) => {
       setLoading(false);
     }
   };
+
+  // Chatbot functions
+  const scrollChatToBottom = () => {
+    chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    if (isChatbotOpen) {
+      scrollChatToBottom();
+    }
+  }, [chatMessages, isChatbotOpen]);
+
+  const handleSendChatMessage = async () => {
+    if (!chatInput.trim() || isChatLoading) return;
+
+    const userMessage = {
+      role: 'user',
+      content: chatInput,
+      timestamp: new Date()
+    };
+
+    setChatMessages(prev => [...prev, userMessage]);
+    const currentInput = chatInput;
+    setChatInput('');
+    setIsChatLoading(true);
+
+    try {
+      // Calculate financial insights from actual expense data
+      const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+      const expensesByCategory = categories.map(cat => {
+        const catExpenses = expenses.filter(exp => exp.category === cat.value);
+        const total = catExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+        return { category: cat.label, total, count: catExpenses.length, icon: cat.icon };
+      }).filter(item => item.total > 0).sort((a, b) => b.total - a.total);
+
+      // Get this month's expenses
+      const now = new Date();
+      const thisMonth = expenses.filter(exp => {
+        const expDate = new Date(exp.date);
+        return expDate.getMonth() === now.getMonth() && expDate.getFullYear() === now.getFullYear();
+      });
+      const monthTotal = thisMonth.reduce((sum, exp) => sum + exp.amount, 0);
+
+      // Get recent expenses (last 7 days)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const recentExpenses = expenses.filter(exp => new Date(exp.date) >= sevenDaysAgo);
+      const recentTotal = recentExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+
+      // Create a detailed context for the AI
+      const contextInfo = `User's Financial Data Summary:
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+Total Expenses (All Time): ₹${totalExpenses.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+Total Transactions: ${expenses.length}
+
+This Month's Expenses: ₹${monthTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })} (${thisMonth.length} transactions)
+
+Last 7 Days: ₹${recentTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })} (${recentExpenses.length} transactions)
+
+Expenses by Category (Top to Bottom):
+${expensesByCategory.map((c, i) => `${i + 1}. ${c.icon} ${c.category}: ₹${c.total.toLocaleString('en-IN', { maximumFractionDigits: 2 })} (${c.count} transactions, ${((c.total / totalExpenses) * 100).toFixed(1)}% of total)`).join('\n')}
+
+Recent Transactions (Last 5):
+${expenses.slice(-5).reverse().map(exp => {
+  const cat = categories.find(c => c.value === exp.category);
+  return `• ${exp.description} - ₹${exp.amount.toLocaleString('en-IN')} (${cat?.icon} ${cat?.label}) - ${new Date(exp.date).toLocaleDateString('en-IN')}`;
+}).join('\n')}`;
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          system: `You are a helpful financial assistant for FinShield, a personal finance tracking application. You have access to the user's real expense data.
+
+${contextInfo}
+
+Your role is to:
+- Provide accurate insights based on the REAL data shown above
+- Help users understand their spending patterns with specific numbers
+- Give practical budgeting advice based on their actual expenses
+- Answer questions about their transactions using the exact data
+- Suggest actionable ways to save money based on their spending habits
+- Use Indian Rupee (₹) format for all amounts
+- Be specific - use actual numbers, percentages, and categories from their data
+
+Important guidelines:
+- ALWAYS use the real data provided above - never make up numbers
+- Be friendly, supportive, and professional
+- Provide specific insights (e.g., "Your Food & Dining expenses are ₹15,000, which is 35% of your total spending")
+- When asked for summaries, include category breakdowns with actual amounts
+- When giving advice, reference their actual spending patterns
+- Keep responses clear and actionable
+- Never ask for sensitive information like passwords or card numbers
+
+Respond in a warm, helpful tone with concrete insights based on their data.`,
+          messages: [
+            { role: 'user', content: currentInput }
+          ]
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('API request failed');
+      }
+
+      const data = await response.json();
+      const assistantMessage = {
+        role: 'assistant',
+        content: data.content[0].text,
+        timestamp: new Date()
+      };
+
+      setChatMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Chat error:', error);
+      
+      // Fallback: Provide intelligent response using local data
+      let responseText = '';
+      const lowerInput = currentInput.toLowerCase();
+      
+      if (lowerInput.includes('summary') || lowerInput.includes('month')) {
+        const now = new Date();
+        const thisMonth = expenses.filter(exp => {
+          const expDate = new Date(exp.date);
+          return expDate.getMonth() === now.getMonth() && expDate.getFullYear() === now.getFullYear();
+        });
+        const monthTotal = thisMonth.reduce((sum, exp) => sum + exp.amount, 0);
+        
+        const monthCategories = categories.map(cat => {
+          const catExpenses = thisMonth.filter(exp => exp.category === cat.value);
+          const total = catExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+          return { category: cat.label, total, count: catExpenses.length, icon: cat.icon };
+        }).filter(item => item.total > 0).sort((a, b) => b.total - a.total);
+
+        responseText = `📊 **Monthly Expense Summary**
+
+**Total This Month:** ₹${monthTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+**Transactions:** ${thisMonth.length}
+
+**Breakdown by Category:**
+${monthCategories.map((c, i) => `${i + 1}. ${c.icon} ${c.category}: ₹${c.total.toLocaleString('en-IN')} (${c.count} transactions)`).join('\n')}
+
+${monthCategories.length > 0 ? `\n💡 Your top expense category is ${monthCategories[0].icon} ${monthCategories[0].category} at ₹${monthCategories[0].total.toLocaleString('en-IN')}.` : ''}`;
+      } 
+      else if (lowerInput.includes('spending') || lowerInput.includes('analyze')) {
+        const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+        const expensesByCategory = categories.map(cat => {
+          const catExpenses = expenses.filter(exp => exp.category === cat.value);
+          const total = catExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+          return { category: cat.label, total, count: catExpenses.length, icon: cat.icon, percentage: ((total / totalExpenses) * 100).toFixed(1) };
+        }).filter(item => item.total > 0).sort((a, b) => b.total - a.total);
+
+        responseText = `📈 **Spending Analysis**
+
+**Total Expenses:** ₹${totalExpenses.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+**Total Transactions:** ${expenses.length}
+
+**Top Spending Categories:**
+${expensesByCategory.slice(0, 5).map((c, i) => `${i + 1}. ${c.icon} ${c.category}: ₹${c.total.toLocaleString('en-IN')} (${c.percentage}%)`).join('\n')}
+
+💡 **Insights:**
+- You have ${expenses.length} transactions across ${expensesByCategory.length} categories
+${expensesByCategory.length > 0 ? `- Your highest spending is in ${expensesByCategory[0].icon} ${expensesByCategory[0].category} (${expensesByCategory[0].percentage}% of total)` : ''}`;
+      }
+      else if (lowerInput.includes('budget') || lowerInput.includes('save')) {
+        const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+        const avgPerTransaction = expenses.length > 0 ? totalExpenses / expenses.length : 0;
+        
+        responseText = `💰 **Budget & Savings Tips**
+
+Based on your spending of ₹${totalExpenses.toLocaleString('en-IN')}:
+
+**Quick Tips:**
+1. 🎯 Set category budgets - Track spending limits for each category
+2. 📊 Review weekly - Check your expenses every week to stay on track
+3. 🔍 Find patterns - Look for recurring expenses you can reduce
+4. 💳 Use cash for discretionary spending - Helps control impulse purchases
+5. 🎁 Wait 24 hours for non-essential purchases
+
+**Your Average Transaction:** ₹${avgPerTransaction.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+
+Would you like specific advice for any particular category?`;
+      }
+      else if (lowerInput.includes('recent') || lowerInput.includes('last') || lowerInput.includes('latest')) {
+        const recent = expenses.slice(-5).reverse();
+        responseText = `📝 **Recent Transactions**
+
+${recent.map((exp, i) => {
+          const cat = categories.find(c => c.value === exp.category);
+          return `${i + 1}. **${exp.description}**
+   ₹${exp.amount.toLocaleString('en-IN')} • ${cat?.icon} ${cat?.label}
+   ${new Date(exp.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+        }).join('\n\n')}`;
+      }
+      else {
+        const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+        responseText = `I can help you with your financial data! 
+
+**Quick Stats:**
+- Total Expenses: ₹${totalExpenses.toLocaleString('en-IN')}
+- Total Transactions: ${expenses.length}
+
+**I can help you with:**
+📊 Monthly summaries
+📈 Spending analysis
+💰 Budget tips
+📝 Recent transactions
+💡 Financial insights
+
+What would you like to know?`;
+      }
+
+      const fallbackMessage = {
+        role: 'assistant',
+        content: responseText,
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, fallbackMessage]);
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
+
+  const handleChatKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendChatMessage();
+    }
+  };
+
+  const quickChatActions = [
+    { label: 'Analyze Spending', prompt: 'Can you analyze my spending patterns and give me insights?' },
+    { label: 'Budget Tips', prompt: 'Give me some budgeting tips based on my expenses' },
+    { label: 'Save Money', prompt: 'How can I reduce my expenses and save more money?' },
+    { label: 'Monthly Summary', prompt: 'Give me a summary of this month\'s expenses' }
+  ];
 
   const handleLogout = () => {
     if (window.confirm('Are you sure you want to logout?')) {
@@ -806,6 +1077,140 @@ const ExpensesTracker = ({ setCurrentPage }) => {
           )}
         </div>
       </div>
+
+      {/* Floating Chat Button */}
+      <button
+        onClick={() => setIsChatbotOpen(true)}
+        className="fixed bottom-6 left-6 z-50 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white p-4 rounded-full shadow-2xl hover:shadow-blue-500/50 transition-all transform hover:scale-110 group"
+      >
+        <Bot />
+        <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse">
+          AI
+        </div>
+      </button>
+
+      {/* Chatbot Overlay */}
+      {isChatbotOpen && (
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/50 z-50 backdrop-blur-sm"
+            onClick={() => setIsChatbotOpen(false)}
+          />
+          
+          {/* Chatbot Window */}
+          <div className="fixed bottom-6 left-6 w-[450px] h-[650px] z-50 flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4">
+            {/* Chatbot Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
+                  <Shield />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">FinShield AI</h3>
+                  <p className="text-blue-100 text-xs">Financial Assistant</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsChatbotOpen(false)}
+                className="text-white/80 hover:text-white hover:bg-white/20 p-2 rounded-lg transition-colors"
+              >
+                <X />
+              </button>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-blue-50 border-b border-blue-100 p-3">
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {quickChatActions.map((action, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setChatInput(action.prompt)}
+                    className="px-3 py-1.5 bg-white hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-medium transition-colors border border-blue-200 whitespace-nowrap"
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Chat Messages */}
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
+              <div className="space-y-3">
+                {chatMessages.map((message, index) => (
+                  <div
+                    key={index}
+                    className={`flex gap-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    {message.role === 'assistant' && (
+                      <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-1.5 rounded-full h-8 w-8 flex items-center justify-center shadow-md flex-shrink-0">
+                        <Bot />
+                      </div>
+                    )}
+                    <div
+                      className={`max-w-[75%] rounded-xl p-3 shadow-sm ${
+                        message.role === 'user'
+                          ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white'
+                          : 'bg-white text-slate-800 border border-slate-200'
+                      }`}
+                    >
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                      <p className={`text-xs mt-1 ${message.role === 'user' ? 'text-blue-100' : 'text-slate-400'}`}>
+                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    {message.role === 'user' && (
+                      <div className="bg-gradient-to-br from-slate-600 to-slate-700 p-1.5 rounded-full h-8 w-8 flex items-center justify-center shadow-md flex-shrink-0">
+                        <User />
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {isChatLoading && (
+                  <div className="flex gap-2 justify-start">
+                    <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-1.5 rounded-full h-8 w-8 flex items-center justify-center shadow-md">
+                      <Bot />
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                      <div className="flex gap-1">
+                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={chatMessagesEndRef} />
+              </div>
+            </div>
+
+            {/* Chat Input */}
+            <div className="bg-white border-t border-slate-200 p-3">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyPress={handleChatKeyPress}
+                  placeholder="Ask me anything..."
+                  className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={isChatLoading}
+                />
+                <button
+                  onClick={handleSendChatMessage}
+                  disabled={!chatInput.trim() || isChatLoading}
+                  className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 text-white px-4 py-2 rounded-lg transition-all shadow-md hover:shadow-lg disabled:cursor-not-allowed flex items-center gap-1.5"
+                >
+                  <Send />
+                </button>
+              </div>
+              <p className="text-center text-slate-400 text-xs mt-2">
+                🔒 Secure & personalized to your data
+              </p>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
