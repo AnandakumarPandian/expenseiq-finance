@@ -1,56 +1,18 @@
 import React, { useState } from 'react';
+import { CATEGORIES, getCategoryMeta, TrendingUp, PieChart, BarChart, Calendar } from './layout';
 
-const TrendingUp = () => (
-  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
-  </svg>
-);
-
-const PieChart = () => (
-  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/>
-  </svg>
-);
-
-const BarChart = () => (
-  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-  </svg>
-);
-
-const Calendar = () => (
-  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-  </svg>
-);
-
-const categories = [
-  { value: 'food', label: 'Food & Dining', color: '#3b82f6', icon: '🍽️' },
-  { value: 'transport', label: 'Transportation', color: '#10b981', icon: '🚗' },
-  { value: 'utilities', label: 'Utilities', color: '#f59e0b', icon: '⚡' },
-  { value: 'entertainment', label: 'Entertainment', color: '#ec4899', icon: '🎭' },
-  { value: 'healthcare', label: 'Healthcare', color: '#8b5cf6', icon: '⚕️' },
-  { value: 'shopping', label: 'Shopping', color: '#ef4444', icon: '🛒' },
-  { value: 'education', label: 'Education', color: '#06b6d4', icon: '📚' },
-  { value: 'other', label: 'Other', color: '#6b7280', icon: '📋' }
-];
-
-
-// Analytics Component
 const Analytics = ({ expenses = [] }) => {
   const [timePeriod, setTimePeriod] = useState('month');
-  
+
   const getFilteredExpenses = () => {
     const now = new Date();
     return expenses.filter(exp => {
       const date = new Date(exp.date);
       switch (timePeriod) {
-        case 'week': return date >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        case 'week':  return date >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         case 'month': return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-        case 'year': return date.getFullYear() === now.getFullYear();
-        case 'all': return true;
-        default: return true;
+        case 'year':  return date.getFullYear() === now.getFullYear();
+        default:      return true;
       }
     });
   };
@@ -63,16 +25,18 @@ const Analytics = ({ expenses = [] }) => {
     filteredExpenses.forEach(exp => {
       categoryTotals[exp.category] = (categoryTotals[exp.category] || 0) + exp.amount;
     });
-    
     return Object.entries(categoryTotals)
-      .map(([category, value]) => ({
-        category,
-        name: categories.find(c => c.value === category)?.label || category,
-        value,
-        percentage: totalExpenses > 0 ? (value / totalExpenses) * 100 : 0,
-        color: categories.find(c => c.value === category)?.color || '#6b7280',
-        icon: categories.find(c => c.value === category)?.icon || '📋'
-      }))
+      .map(([category, value]) => {
+        const meta = getCategoryMeta(category);
+        return {
+          category,
+          name: meta.label,
+          value,
+          percentage: totalExpenses > 0 ? (value / totalExpenses) * 100 : 0,
+          color: meta.color,
+          icon: meta.icon,
+        };
+      })
       .sort((a, b) => b.value - a.value);
   };
 
@@ -82,32 +46,32 @@ const Analytics = ({ expenses = [] }) => {
       const date = new Date(exp.date).toISOString().split('T')[0];
       dailyTotals[date] = (dailyTotals[date] || 0) + exp.amount;
     });
-    
     const sorted = Object.entries(dailyTotals)
       .sort(([a], [b]) => new Date(a) - new Date(b))
       .slice(-30);
     const maxAmount = Math.max(...sorted.map(([, amount]) => amount), 1);
-    
     return sorted.map(([date, amount]) => ({
       date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       amount,
-      height: maxAmount > 0 ? (amount / maxAmount) * 100 : 0
+      height: maxAmount > 0 ? (amount / maxAmount) * 100 : 0,
     }));
   };
 
   const getMonthlyComparison = () => {
     const now = new Date();
-    const currentMonth = expenses.filter(exp => {
-      const date = new Date(exp.date);
-      return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-    }).reduce((sum, exp) => sum + exp.amount, 0);
-
-    const lastMonth = expenses.filter(exp => {
-      const date = new Date(exp.date);
-      const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1);
-      return date.getMonth() === lastMonthDate.getMonth() && date.getFullYear() === lastMonthDate.getFullYear();
-    }).reduce((sum, exp) => sum + exp.amount, 0);
-
+    const currentMonth = expenses
+      .filter(exp => {
+        const date = new Date(exp.date);
+        return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+      })
+      .reduce((sum, exp) => sum + exp.amount, 0);
+    const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1);
+    const lastMonth = expenses
+      .filter(exp => {
+        const date = new Date(exp.date);
+        return date.getMonth() === lastMonthDate.getMonth() && date.getFullYear() === lastMonthDate.getFullYear();
+      })
+      .reduce((sum, exp) => sum + exp.amount, 0);
     const change = lastMonth > 0 ? ((currentMonth - lastMonth) / lastMonth) * 100 : 0;
     return { currentMonth, lastMonth, change };
   };
@@ -141,9 +105,7 @@ const Analytics = ({ expenses = [] }) => {
         <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-medium text-slate-600">Total Spent</span>
-            <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
-              <TrendingUp />
-            </div>
+            <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center"><TrendingUp /></div>
           </div>
           <div className="text-2xl font-bold text-slate-900">₹{totalExpenses.toLocaleString('en-IN')}</div>
           <p className="text-xs text-slate-500 mt-2">Current period</p>
@@ -152,9 +114,7 @@ const Analytics = ({ expenses = [] }) => {
         <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-medium text-slate-600">Daily Average</span>
-            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-              <Calendar />
-            </div>
+            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center"><Calendar /></div>
           </div>
           <div className="text-2xl font-bold text-slate-900">₹{avgDaily.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
           <p className="text-xs text-slate-500 mt-2">Per day spending</p>
@@ -163,9 +123,7 @@ const Analytics = ({ expenses = [] }) => {
         <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-medium text-slate-600">Top Category</span>
-            <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
-              <PieChart />
-            </div>
+            <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center"><PieChart /></div>
           </div>
           <div className="text-2xl font-bold text-slate-900">{topCategory?.icon || '📊'}</div>
           <p className="text-xs text-slate-500 mt-2">{topCategory?.name || 'N/A'}</p>
@@ -181,9 +139,7 @@ const Analytics = ({ expenses = [] }) => {
           <div className={`text-2xl font-bold ${monthlyComparison.change > 0 ? 'text-red-600' : 'text-green-600'}`}>
             {monthlyComparison.change > 0 ? '+' : ''}{monthlyComparison.change.toFixed(1)}%
           </div>
-          <p className="text-xs text-slate-500 mt-2">
-            {monthlyComparison.change > 0 ? 'Increase' : 'Decrease'}
-          </p>
+          <p className="text-xs text-slate-500 mt-2">{monthlyComparison.change > 0 ? 'Increase' : 'Decrease'}</p>
         </div>
       </div>
 
@@ -207,18 +163,14 @@ const Analytics = ({ expenses = [] }) => {
                     </span>
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${cat.percentage}%`, backgroundColor: cat.color }}
-                    />
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${cat.percentage}%`, backgroundColor: cat.color }} />
                   </div>
                 </div>
               ))}
             </div>
           ) : (
             <div className="text-center py-12 text-slate-500">
-              <PieChart />
-              <p className="mt-2">No data available</p>
+              <PieChart /><p className="mt-2">No data available</p>
             </div>
           )}
         </div>
@@ -232,7 +184,7 @@ const Analytics = ({ expenses = [] }) => {
             <div className="h-64 flex items-end justify-between gap-1">
               {trendData.map((item, index) => (
                 <div key={index} className="flex-1 flex flex-col items-center gap-2">
-                  <div 
+                  <div
                     className="w-full bg-slate-800 rounded-t transition-all duration-300 hover:bg-slate-700 relative group"
                     style={{ height: `${item.height}%`, minHeight: '4px' }}
                   >
@@ -241,17 +193,14 @@ const Analytics = ({ expenses = [] }) => {
                     </div>
                   </div>
                   {index % Math.ceil(trendData.length / 7) === 0 && (
-                    <span className="text-xs text-slate-500 transform -rotate-45 origin-top-left mt-2 whitespace-nowrap">
-                      {item.date}
-                    </span>
+                    <span className="text-xs text-slate-500 transform -rotate-45 origin-top-left mt-2 whitespace-nowrap">{item.date}</span>
                   )}
                 </div>
               ))}
             </div>
           ) : (
             <div className="text-center py-12 text-slate-500">
-              <BarChart />
-              <p className="mt-2">No data available</p>
+              <BarChart /><p className="mt-2">No data available</p>
             </div>
           )}
         </div>
@@ -262,15 +211,11 @@ const Analytics = ({ expenses = [] }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <div className="text-sm font-medium text-slate-600 mb-2">Current Month</div>
-            <div className="text-3xl font-bold text-slate-900">
-              ₹{monthlyComparison.currentMonth.toLocaleString('en-IN')}
-            </div>
+            <div className="text-3xl font-bold text-slate-900">₹{monthlyComparison.currentMonth.toLocaleString('en-IN')}</div>
           </div>
           <div>
             <div className="text-sm font-medium text-slate-600 mb-2">Previous Month</div>
-            <div className="text-3xl font-bold text-slate-900">
-              ₹{monthlyComparison.lastMonth.toLocaleString('en-IN')}
-            </div>
+            <div className="text-3xl font-bold text-slate-900">₹{monthlyComparison.lastMonth.toLocaleString('en-IN')}</div>
           </div>
         </div>
       </div>
