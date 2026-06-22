@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import ProfilePanel from './profile';
 
 // ─── Icon Components ───────────────────────────────────────────────────────────
 
@@ -112,7 +113,7 @@ export const CheckCircle = () => (
   </svg>
 );
 
-// Chevron icons for the toggle arrow
+// internal only — not exported
 const ChevronLeft = () => (
   <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"/>
@@ -181,17 +182,19 @@ export const NAV_ITEMS = [
   { id: 'analytics',  label: 'Analytics', icon: <BarChart /> },
   { id: 'budgets',    label: 'Budgets',   icon: <PieChart /> },
   { id: 'cards',      label: 'Cards',     icon: <CreditCard /> },
-  { id: 'profile',    label: 'Profile',   icon: <User /> },
   { id: 'settings',   label: 'Settings',  icon: <Settings /> },
 ];
 
 // ─── Layout ────────────────────────────────────────────────────────────────────
 
-const Layout = ({ currentView, onNavigate, onLogout, userData, children }) => {
-  // Persist sidebar open/closed state across refreshes
+const Layout = ({ currentView, onNavigate, onLogout, userData: initialUserData, children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(
     () => localStorage.getItem('finshield_sidebar') !== 'closed'
   );
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [userData, setUserData] = useState(initialUserData);
+
+  useEffect(() => { setUserData(initialUserData); }, [initialUserData]);
 
   const toggleSidebar = () => {
     const next = !sidebarOpen;
@@ -200,70 +203,51 @@ const Layout = ({ currentView, onNavigate, onLogout, userData, children }) => {
   };
 
   const pageTitle = NAV_ITEMS.find((n) => n.id === currentView)?.label ?? 'Dashboard';
-
   const SIDEBAR_W  = 256;
   const COLLAPSE_W = 64;
   const sidebarWidth = sidebarOpen ? SIDEBAR_W : COLLAPSE_W;
+
+  const initials = (
+    (userData?.firstName?.charAt(0) ?? '') +
+    (userData?.lastName?.charAt(0)  ?? '')
+  ).toUpperCase() || userData?.email?.charAt(0)?.toUpperCase() || 'U';
+
+  const displayName = userData?.firstName
+    ? `${userData.firstName} ${userData.lastName ?? ''}`.trim()
+    : userData?.email ?? '';
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
 
       {/* ── Sidebar ── */}
       <aside style={{
-        width: `${sidebarWidth}px`,
-        minWidth: `${sidebarWidth}px`,
-        backgroundColor: '#0f172a',
-        color: 'white',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        position: 'sticky',
-        top: 0,
-        overflowY: 'auto',
-        overflowX: 'hidden',
+        width: `${sidebarWidth}px`, minWidth: `${sidebarWidth}px`,
+        backgroundColor: '#0f172a', color: 'white',
+        display: 'flex', flexDirection: 'column',
+        height: '100vh', position: 'sticky', top: 0,
+        overflowY: 'auto', overflowX: 'hidden',
         transition: 'width 0.25s ease, min-width 0.25s ease',
         flexShrink: 0,
       }}>
 
-        {/* Logo + toggle button */}
+        {/* Logo + toggle */}
         <div style={{
-          padding: '0 12px',
-          height: '64px',
-          borderBottom: '1px solid #1e293b',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: sidebarOpen ? 'space-between' : 'center',
-          flexShrink: 0,
+          padding: '0 12px', height: '64px', borderBottom: '1px solid #1e293b',
+          display: 'flex', alignItems: 'center',
+          justifyContent: sidebarOpen ? 'space-between' : 'center', flexShrink: 0,
         }}>
-          {/* Logo — hidden when collapsed */}
           {sidebarOpen && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '4px' }}>
-              <div style={{
-                width: '32px', height: '32px', backgroundColor: 'white',
-                borderRadius: '8px', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', flexShrink: 0,
-              }}>
+              <div style={{ width: '32px', height: '32px', backgroundColor: 'white', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <span style={{ color: '#0f172a', fontWeight: 'bold', fontSize: '14px' }}>F</span>
               </div>
               <span style={{ fontWeight: 'bold', fontSize: '17px', whiteSpace: 'nowrap' }}>FinShield</span>
             </div>
           )}
-
-          {/* Toggle button */}
           <button
             onClick={toggleSidebar}
-            title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-            style={{
-              width: '32px', height: '32px',
-              borderRadius: '8px',
-              border: 'none',
-              backgroundColor: '#1e293b',
-              color: '#94a3b8',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer',
-              flexShrink: 0,
-              transition: 'background-color 0.15s, color 0.15s',
-            }}
+            title={sidebarOpen ? 'Collapse' : 'Expand'}
+            style={{ width: '32px', height: '32px', borderRadius: '8px', border: 'none', backgroundColor: '#1e293b', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'background-color 0.15s' }}
             onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#334155'; e.currentTarget.style.color = 'white'; }}
             onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#1e293b'; e.currentTarget.style.color = '#94a3b8'; }}
           >
@@ -271,35 +255,20 @@ const Layout = ({ currentView, onNavigate, onLogout, userData, children }) => {
           </button>
         </div>
 
-        {/* User info — only when expanded */}
+        {/* User info strip (expanded only) */}
         {sidebarOpen && userData && (
-          <div style={{
-            padding: '12px 16px',
-            borderBottom: '1px solid #1e293b',
-            display: 'flex', alignItems: 'center', gap: '10px',
-            flexShrink: 0,
-          }}>
-            <div style={{
-              width: '36px', height: '36px', borderRadius: '8px',
-              backgroundColor: '#334155', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', fontWeight: '700', fontSize: '14px', flexShrink: 0,
-            }}>
-              {(userData.firstName?.charAt(0) ?? userData.email?.charAt(0) ?? 'U').toUpperCase()}
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '14px', flexShrink: 0 }}>
+              {initials}
             </div>
             <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: '13px', fontWeight: '600', color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {userData.firstName ? `${userData.firstName} ${userData.lastName ?? ''}`.trim() : userData.email}
-              </div>
-              {userData.firstName && (
-                <div style={{ fontSize: '11px', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {userData.email}
-                </div>
-              )}
+              <div style={{ fontSize: '13px', fontWeight: '600', color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName}</div>
+              {userData.firstName && <div style={{ fontSize: '11px', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userData.email}</div>}
             </div>
           </div>
         )}
 
-        {/* Nav items */}
+        {/* Nav */}
         <nav style={{ flex: 1, padding: '10px 8px', overflowY: 'auto' }}>
           {NAV_ITEMS.map((item) => {
             const active = currentView === item.id;
@@ -309,23 +278,15 @@ const Layout = ({ currentView, onNavigate, onLogout, userData, children }) => {
                 onClick={() => onNavigate(item.id)}
                 title={!sidebarOpen ? item.label : undefined}
                 style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
+                  width: '100%', display: 'flex', alignItems: 'center',
                   gap: sidebarOpen ? '12px' : '0',
                   justifyContent: sidebarOpen ? 'flex-start' : 'center',
                   padding: sidebarOpen ? '10px 14px' : '10px 0',
-                  borderRadius: '8px',
-                  marginBottom: '2px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  transition: 'background-color 0.15s',
+                  borderRadius: '8px', marginBottom: '2px', border: 'none', cursor: 'pointer',
+                  fontSize: '14px', fontWeight: '500', transition: 'background-color 0.15s',
                   backgroundColor: active ? 'white' : 'transparent',
                   color: active ? '#0f172a' : '#cbd5e1',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
+                  whiteSpace: 'nowrap', overflow: 'hidden',
                 }}
                 onMouseEnter={e => { if (!active) e.currentTarget.style.backgroundColor = '#1e293b'; }}
                 onMouseLeave={e => { if (!active) e.currentTarget.style.backgroundColor = 'transparent'; }}
@@ -343,22 +304,14 @@ const Layout = ({ currentView, onNavigate, onLogout, userData, children }) => {
             onClick={onLogout}
             title={!sidebarOpen ? 'Logout' : undefined}
             style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
+              width: '100%', display: 'flex', alignItems: 'center',
               gap: sidebarOpen ? '12px' : '0',
               justifyContent: sidebarOpen ? 'flex-start' : 'center',
               padding: sidebarOpen ? '10px 14px' : '10px 0',
-              borderRadius: '8px',
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: 'transparent',
-              color: '#f87171',
-              fontSize: '14px',
-              fontWeight: '500',
-              transition: 'background-color 0.15s',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
+              borderRadius: '8px', border: 'none', cursor: 'pointer',
+              backgroundColor: 'transparent', color: '#f87171',
+              fontSize: '14px', fontWeight: '500', transition: 'background-color 0.15s',
+              whiteSpace: 'nowrap', overflow: 'hidden',
             }}
             onMouseEnter={e => e.currentTarget.style.backgroundColor = '#1e293b'}
             onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -374,38 +327,42 @@ const Layout = ({ currentView, onNavigate, onLogout, userData, children }) => {
 
         {/* Topbar */}
         <header style={{
-          backgroundColor: 'white',
-          borderBottom: '1px solid #e2e8f0',
-          padding: '0 24px',
-          height: '64px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexShrink: 0,
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
+          backgroundColor: 'white', borderBottom: '1px solid #e2e8f0',
+          padding: '0 24px', height: '64px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          flexShrink: 0, position: 'sticky', top: 0, zIndex: 10,
         }}>
-          <h1 style={{ fontSize: '18px', fontWeight: '600', color: '#0f172a', margin: 0 }}>
-            {pageTitle}
-          </h1>
+          <h1 style={{ fontSize: '18px', fontWeight: '600', color: '#0f172a', margin: 0 }}>{pageTitle}</h1>
 
-          {userData && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{
-                width: '32px', height: '32px', borderRadius: '50%',
-                backgroundColor: '#e2e8f0', display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                <User />
-              </div>
-              <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-                {userData.firstName
-                  ? `${userData.firstName} ${userData.lastName ?? ''}`.trim()
-                  : userData.email}
-              </span>
+          {/* Clickable avatar — opens profile panel */}
+          <button
+            onClick={() => setProfileOpen(true)}
+            title="My Profile"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              padding: '6px 10px', borderRadius: '10px', border: 'none',
+              backgroundColor: 'transparent', cursor: 'pointer',
+              transition: 'background-color 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            <div style={{
+              width: '36px', height: '36px', borderRadius: '50%',
+              backgroundColor: '#0f172a', color: 'white',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '14px', fontWeight: '700', flexShrink: 0,
+            }}>
+              {initials}
             </div>
-          )}
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', whiteSpace: 'nowrap' }}>{displayName}</div>
+              {userData?.email && <div style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap' }}>{userData.email}</div>}
+            </div>
+            <svg width="14" height="14" fill="none" stroke="#94a3b8" viewBox="0 0 24 24" style={{ marginLeft: '2px', flexShrink: 0 }}>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+            </svg>
+          </button>
         </header>
 
         {/* Page content */}
@@ -413,6 +370,15 @@ const Layout = ({ currentView, onNavigate, onLogout, userData, children }) => {
           {children}
         </main>
       </div>
+
+      {/* ── Profile slide-in panel ── */}
+      {profileOpen && (
+        <ProfilePanel
+          userData={userData}
+          onClose={() => setProfileOpen(false)}
+          onSave={(updated) => setUserData(updated)}
+        />
+      )}
     </div>
   );
 };

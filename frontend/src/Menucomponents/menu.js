@@ -307,7 +307,6 @@ ${expenses.slice(-5).reverse().map(exp => {
       {currentView === 'analytics' && <Analytics expenses={expenses} />}
       {currentView === 'budgets'   && <Budget expenses={expenses} />}
       {currentView === 'cards'     && renderPlaceholderView('Cards')}
-      {currentView === 'profile'   && renderPlaceholderView('Profile')}
       {currentView === 'settings'  && renderPlaceholderView('Settings')}
 
       {currentView === 'expenses' && (
