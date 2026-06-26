@@ -368,7 +368,7 @@ ${expenses.slice(-5).reverse().map(exp => {
                   onClick={() => { setShowAddForm(!showAddForm); setEditingId(null); setFormData({ description: '', amount: '', category: 'food', date: new Date().toISOString().split('T')[0], notes: '' }); }}
                   className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
                 >
-                  <Plus /> Add Expensess
+                  <Plus /> Add Expense
                 </button>
               </div>
             </div>
