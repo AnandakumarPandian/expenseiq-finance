@@ -22,7 +22,7 @@ app.use(express.json());
 
 // MongoDB Connection
 mongoose
-  .connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/finshield_finance')
+  .connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/expenseiq_finance')
   .then(() => console.log("MongoDB Connected Successfully"))
   .catch((err) => console.error("MongoDB Error:", err));
 
@@ -96,8 +96,47 @@ ExpenseSchema.pre('save', function(next) {
   next();
 });
 
+// Budget Schema
+const BudgetSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  category: {
+    type: String,
+    required: true,
+    enum: ['food', 'transport', 'utilities', 'entertainment', 'healthcare', 'shopping', 'education', 'other']
+  },
+  amount: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  period: {
+    type: String,
+    required: true,
+    enum: ['weekly', 'monthly', 'yearly'],
+    default: 'monthly'
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+BudgetSchema.pre('save', function(next) {
+  this.updatedAt = Date.now();
+  next();
+});
+
 const User = mongoose.model("User", UserSchema);
 const Expense = mongoose.model("Expense", ExpenseSchema);
+const Budget = mongoose.model("Budget", BudgetSchema);
 
 // ==================== MIDDLEWARE ====================
 
@@ -335,6 +374,133 @@ app.get('/api/expenses/stats/summary', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== BUDGET ROUTES ====================
+
+// Get all budgets for authenticated user
+app.get('/api/budgets', authenticateToken, async (req, res) => {
+  try {
+    const budgets = await Budget.find({ userId: req.user.userId })
+      .sort({ createdAt: -1 });
+
+    res.json(budgets);
+  } catch (error) {
+    console.error('Get Budgets Error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error fetching budgets',
+      error: error.message
+    });
+  }
+});
+
+// Create new budget
+app.post('/api/budgets', authenticateToken, async (req, res) => {
+  try {
+    const { category, amount, period } = req.body;
+
+    if (!category || !amount || !period) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Category, amount, and period are required'
+      });
+    }
+
+    if (amount <= 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Amount must be greater than 0'
+      });
+    }
+
+    const budget = await Budget.create({
+      userId: req.user.userId,
+      category,
+      amount: parseFloat(amount),
+      period
+    });
+
+    res.status(201).json(budget);
+  } catch (error) {
+    console.error('Create Budget Error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error creating budget',
+      error: error.message
+    });
+  }
+});
+
+// Update budget
+app.put('/api/budgets/:id', authenticateToken, async (req, res) => {
+  try {
+    const { category, amount, period } = req.body;
+
+    const budget = await Budget.findOne({
+      _id: req.params.id,
+      userId: req.user.userId
+    });
+
+    if (!budget) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Budget not found'
+      });
+    }
+
+    if (category !== undefined) budget.category = category;
+    if (amount !== undefined) {
+      if (amount <= 0) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Amount must be greater than 0'
+        });
+      }
+      budget.amount = parseFloat(amount);
+    }
+    if (period !== undefined) budget.period = period;
+
+    await budget.save();
+
+    res.json(budget);
+  } catch (error) {
+    console.error('Update Budget Error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error updating budget',
+      error: error.message
+    });
+  }
+});
+
+// Delete budget
+app.delete('/api/budgets/:id', authenticateToken, async (req, res) => {
+  try {
+    const budget = await Budget.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.user.userId
+    });
+
+    if (!budget) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Budget not found'
+      });
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Budget deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete Budget Error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error deleting budget',
+      error: error.message
+    });
+  }
+});
+
 // ==================== OAUTH ROUTES ====================
 
 // Google OAuth
@@ -422,7 +588,7 @@ app.post('/api/auth/facebook', async (req, res) => {
       user = await User.create({
         firstName: first_name,
         lastName: last_name,
-        email: email || `facebook_${facebookId}@finshield.com`,
+        email: email || `facebook_${facebookId}@expenseiq.com`,
         facebookId,
         profilePicture: picture?.data?.url,
         authProvider: 'facebook',
@@ -484,7 +650,7 @@ app.post('/api/auth/apple', async (req, res) => {
       existingUser = await User.create({
         firstName,
         lastName,
-        email: email || `apple_${appleId}@finshield.com`,
+        email: email || `apple_${appleId}@expenseiq.com`,
         appleId,
         authProvider: 'apple',
         terms: true
@@ -527,7 +693,7 @@ app.post('/api/auth/apple', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'success', 
-    message: 'FinShield API is running',
+    message: 'ExpenseIQ API is running',
     timestamp: new Date().toISOString()
   });
 });
@@ -697,7 +863,7 @@ app.get('/api/stats', async (req, res) => {
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
   console.log('=================================');
-  console.log('FinShield API Server');
+  console.log('ExpenseIQ API Server');
   console.log('=================================');
   console.log('Server: http://localhost:' + PORT);
   console.log('Health: http://localhost:' + PORT + '/api/health');
@@ -709,5 +875,9 @@ app.listen(PORT, () => {
   console.log('- POST /api/expenses');
   console.log('- PUT  /api/expenses/:id');
   console.log('- DELETE /api/expenses/:id');
+  console.log('- GET  /api/budgets');
+  console.log('- POST /api/budgets');
+  console.log('- PUT  /api/budgets/:id');
+  console.log('- DELETE /api/budgets/:id');
   console.log('=================================');
 });

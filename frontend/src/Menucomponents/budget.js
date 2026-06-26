@@ -1,43 +1,56 @@
 import React, { useState, useEffect } from 'react';
-import { CATEGORIES, getCategoryMeta, Plus, Edit, Trash, AlertCircle, CheckCircle, PieChart } from './layout';
+import { CATEGORIES, getCategoryMeta, api, Plus, Edit, Trash, AlertCircle, CheckCircle, PieChart, Refresh } from './layout';
 
 const Budget = ({ expenses }) => {
-  const [budgets, setBudgets] = useState([]);
+  const [budgets, setBudgets]       = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({ category: 'food', amount: '', period: 'monthly' });
+  const [editingId, setEditingId]   = useState(null);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState(null);
+  const [formData, setFormData]     = useState({ category: 'food', amount: '', period: 'monthly' });
 
-  useEffect(() => {
-    const saved = localStorage.getItem('finshield_budgets');
-    if (saved) setBudgets(JSON.parse(saved));
-  }, []);
+  // ── Data fetching ────────────────────────────────────────────────────────────
 
-  const saveBudgets = (newBudgets) => {
-    localStorage.setItem('finshield_budgets', JSON.stringify(newBudgets));
-    setBudgets(newBudgets);
+  useEffect(() => { loadBudgets(); }, []);
+
+  const loadBudgets = async () => {
+    setLoading(true); setError(null);
+    try { setBudgets(await api.budgets.getAll()); }
+    catch (err) { setError('Failed to load budgets. Ensure backend is running.'); setBudgets([]); }
+    finally { setLoading(false); }
   };
 
-  const handleSubmit = () => {
+  // ── CRUD ─────────────────────────────────────────────────────────────────────
+
+  const handleSubmit = async () => {
     if (!formData.amount) { alert('Please enter a budget amount'); return; }
-    if (editingId) {
-      saveBudgets(budgets.map(b => b.id === editingId ? { ...b, ...formData, amount: parseFloat(formData.amount) } : b));
-    } else {
-      saveBudgets([...budgets, { id: Date.now().toString(), ...formData, amount: parseFloat(formData.amount) }]);
-    }
-    setFormData({ category: 'food', amount: '', period: 'monthly' });
-    setShowAddForm(false);
-    setEditingId(null);
+    setLoading(true);
+    try {
+      const payload = { ...formData, amount: parseFloat(formData.amount) };
+      if (editingId) await api.budgets.update(editingId, payload);
+      else           await api.budgets.create(payload);
+      await loadBudgets();
+      setFormData({ category: 'food', amount: '', period: 'monthly' });
+      setShowAddForm(false); setEditingId(null);
+    } catch (err) { setError(err.message || 'Failed to save budget'); }
+    finally { setLoading(false); }
   };
 
   const handleEdit = (budget) => {
     setFormData({ category: budget.category, amount: budget.amount.toString(), period: budget.period });
-    setEditingId(budget.id);
+    setEditingId(budget._id);
     setShowAddForm(true);
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this budget?')) saveBudgets(budgets.filter(b => b.id !== id));
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this budget?')) return;
+    setLoading(true);
+    try { await api.budgets.delete(id); await loadBudgets(); }
+    catch (err) { setError(err.message || 'Failed to delete budget'); }
+    finally { setLoading(false); }
   };
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
 
   const getBudgetProgress = (budget) => {
     const now = new Date();
@@ -60,8 +73,11 @@ const Budget = ({ expenses }) => {
   const totalBudget = budgets.reduce((sum, b) => sum + b.amount, 0);
   const totalSpent  = budgets.reduce((sum, b) => sum + getBudgetProgress(b).spent, 0);
 
+  // ── Render ───────────────────────────────────────────────────────────────────
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -75,6 +91,14 @@ const Budget = ({ expenses }) => {
           <Plus /> Add Budget
         </button>
       </div>
+
+      {/* Error banner */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="ml-4 text-red-500 hover:text-red-700 font-bold">✕</button>
+        </div>
+      )}
 
       {/* Overview Stats */}
       {budgets.length > 0 && (
@@ -125,10 +149,17 @@ const Budget = ({ expenses }) => {
               <option value="yearly">Yearly</option>
             </select>
             <div className="md:col-span-3 flex gap-3">
-              <button onClick={handleSubmit} className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2 rounded-lg font-medium transition-colors">
-                {editingId ? 'Update Budget' : 'Create Budget'}
+              <button
+                onClick={handleSubmit} disabled={loading}
+                className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                {loading ? 'Saving...' : editingId ? 'Update Budget' : 'Create Budget'}
               </button>
-              <button onClick={() => { setShowAddForm(false); setEditingId(null); }} className="bg-white border border-slate-300 text-slate-700 px-6 py-2 rounded-lg font-medium hover:bg-slate-50 transition-colors">
+              <button
+                onClick={() => { setShowAddForm(false); setEditingId(null); }}
+                disabled={loading}
+                className="bg-white border border-slate-300 text-slate-700 px-6 py-2 rounded-lg font-medium hover:bg-slate-50 transition-colors"
+              >
                 Cancel
               </button>
             </div>
@@ -136,8 +167,16 @@ const Budget = ({ expenses }) => {
         </div>
       )}
 
+      {/* Loading state */}
+      {loading && budgets.length === 0 && (
+        <div className="bg-white rounded-xl p-12 border border-slate-200 shadow-sm text-center text-slate-500">
+          <div className="animate-spin mx-auto mb-4 w-fit"><Refresh /></div>
+          <p>Loading budgets...</p>
+        </div>
+      )}
+
       {/* Budget Cards */}
-      {budgets.length === 0 ? (
+      {!loading && budgets.length === 0 ? (
         <div className="bg-white rounded-xl p-12 border border-slate-200 shadow-sm text-center">
           <div className="w-16 h-16 mx-auto mb-4 bg-slate-100 rounded-full flex items-center justify-center"><PieChart /></div>
           <h3 className="text-lg font-semibold text-slate-900 mb-2">No Budgets Yet</h3>
@@ -149,13 +188,13 @@ const Budget = ({ expenses }) => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {budgets.map(budget => {
-            const cat = getCategoryMeta(budget.category);
+            const cat      = getCategoryMeta(budget.category);
             const progress = getBudgetProgress(budget);
             const isOverBudget = progress.percentage > 100;
-            const isWarning = progress.percentage > 80 && !isOverBudget;
+            const isWarning    = progress.percentage > 80 && !isOverBudget;
 
             return (
-              <div key={budget.id} className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
+              <div key={budget._id} className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-lg flex items-center justify-center text-2xl" style={{ backgroundColor: cat.color + '20' }}>
@@ -167,8 +206,8 @@ const Budget = ({ expenses }) => {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => handleEdit(budget)} className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors"><Edit /></button>
-                    <button onClick={() => handleDelete(budget.id)} className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"><Trash /></button>
+                    <button onClick={() => handleEdit(budget)} disabled={loading} className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors disabled:opacity-50"><Edit /></button>
+                    <button onClick={() => handleDelete(budget._id)} disabled={loading} className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50"><Trash /></button>
                   </div>
                 </div>
 

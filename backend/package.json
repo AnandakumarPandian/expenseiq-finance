@@ -1,7 +1,7 @@
 {
-  "name": "finshield-backend",
+  "name": "expenseiq-backend",
   "version": "1.0.0",
-  "description": "FinShield Backend API",
+  "description": "ExpenseIQ Backend API",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

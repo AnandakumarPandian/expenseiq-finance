@@ -148,7 +148,7 @@ export const API_BASE_URL = 'http://localhost:8000/api';
 
 export const api = {
   async request(endpoint, options = {}) {
-    const token = localStorage.getItem('finshield_token');
+    const token = localStorage.getItem('expenseiq_token');
     const headers = {
       'Content-Type': 'application/json',
       ...(token && { Authorization: `Bearer ${token}` }),
@@ -172,6 +172,12 @@ export const api = {
     update:  (id, data) => api.request(`/expenses/${id}`, { method: 'PUT',    body: JSON.stringify(data) }),
     delete:  (id)       => api.request(`/expenses/${id}`, { method: 'DELETE' }),
   },
+  budgets: {
+    getAll:  ()         => api.request('/budgets'),
+    create:  (data)     => api.request('/budgets',       { method: 'POST',   body: JSON.stringify(data) }),
+    update:  (id, data) => api.request(`/budgets/${id}`, { method: 'PUT',    body: JSON.stringify(data) }),
+    delete:  (id)       => api.request(`/budgets/${id}`, { method: 'DELETE' }),
+  },
 };
 
 // ─── Navigation Config ─────────────────────────────────────────────────────────
@@ -189,7 +195,7 @@ export const NAV_ITEMS = [
 
 const Layout = ({ currentView, onNavigate, onLogout, userData: initialUserData, children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(
-    () => localStorage.getItem('finshield_sidebar') !== 'closed'
+    () => localStorage.getItem('expenseiq_sidebar') !== 'closed'
   );
   const [profileOpen, setProfileOpen] = useState(false);
   const [userData, setUserData] = useState(initialUserData);
@@ -199,7 +205,7 @@ const Layout = ({ currentView, onNavigate, onLogout, userData: initialUserData, 
   const toggleSidebar = () => {
     const next = !sidebarOpen;
     setSidebarOpen(next);
-    localStorage.setItem('finshield_sidebar', next ? 'open' : 'closed');
+    localStorage.setItem('expenseiq_sidebar', next ? 'open' : 'closed');
   };
 
   const pageTitle = NAV_ITEMS.find((n) => n.id === currentView)?.label ?? 'Dashboard';
@@ -239,9 +245,9 @@ const Layout = ({ currentView, onNavigate, onLogout, userData: initialUserData, 
           {sidebarOpen && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '4px' }}>
               <div style={{ width: '32px', height: '32px', backgroundColor: 'white', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <span style={{ color: '#0f172a', fontWeight: 'bold', fontSize: '14px' }}>F</span>
+                <span style={{ color: '#0f172a', fontWeight: 'bold', fontSize: '14px' }}>E</span>
               </div>
-              <span style={{ fontWeight: 'bold', fontSize: '17px', whiteSpace: 'nowrap' }}>FinShield</span>
+              <span style={{ fontWeight: 'bold', fontSize: '17px', whiteSpace: 'nowrap' }}>ExpenseIQ</span>
             </div>
           )}
           <button

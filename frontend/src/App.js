@@ -8,8 +8,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('finshield_token');
-    const user = localStorage.getItem('finshield_user');
+    const token = localStorage.getItem('expenseiq_token');
+    const user = localStorage.getItem('expenseiq_user');
     setCurrentPage(token && user ? 'menu' : 'login');
     setIsLoading(false);
   }, []);

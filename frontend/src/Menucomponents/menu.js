@@ -42,11 +42,11 @@ const ExpensesTracker = ({ setCurrentPage }) => {
   const [filterPeriod, setFilterPeriod] = useState('all');
   const [editingId, setEditingId] = useState(null);
   const [currentView, setCurrentView] = useState(
-    () => localStorage.getItem('finshield_current_view') || 'dashboard'
+    () => localStorage.getItem('expenseiq_current_view') || 'dashboard'
   );
 
   const handleViewChange = (view) => {
-    localStorage.setItem('finshield_current_view', view);
+    localStorage.setItem('expenseiq_current_view', view);
     setCurrentView(view);
   };
   const [userData, setUserData] = useState(null);
@@ -55,7 +55,7 @@ const ExpensesTracker = ({ setCurrentPage }) => {
   const [isChatbotOpen, setIsChatbotOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState([{
     role: 'assistant',
-    content: "Welcome to FinShield! 🛡️ I'm your financial assistant. I can help you with expense tracking, budgeting tips, spending analysis, and more. How can I assist you today?",
+    content: "Welcome to ExpenseIQ! 🛡️ I'm your financial assistant. I can help you with expense tracking, budgeting tips, spending analysis, and more. How can I assist you today?",
     timestamp: new Date()
   }]);
   const [chatInput, setChatInput] = useState('');
@@ -72,7 +72,7 @@ const ExpensesTracker = ({ setCurrentPage }) => {
   useEffect(() => {
     loadExpenses();
     try {
-      const user = localStorage.getItem('finshield_user');
+      const user = localStorage.getItem('expenseiq_user');
       if (user) setUserData(JSON.parse(user));
     } catch (e) { console.error('Error loading user data:', e); }
   }, []);
@@ -140,7 +140,7 @@ ${expenses.slice(-5).reverse().map(exp => {
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 1000,
-          system: `You are a helpful financial assistant for FinShield, a personal finance tracking application. You have access to the user's real expense data.\n\n${contextInfo}\n\nYour role is to provide accurate insights based on the REAL data, give practical budgeting advice, answer questions about transactions, suggest actionable ways to save money. Use Indian Rupee (₹) format. Be specific with numbers. Be friendly and professional. Never ask for sensitive information.`,
+          system: `You are a helpful financial assistant for ExpenseIQ, a personal finance tracking application. You have access to the user's real expense data.\n\n${contextInfo}\n\nYour role is to provide accurate insights based on the REAL data, give practical budgeting advice, answer questions about transactions, suggest actionable ways to save money. Use Indian Rupee (₹) format. Be specific with numbers. Be friendly and professional. Never ask for sensitive information.`,
           messages: [{ role: 'user', content: currentInput }]
         })
       });
@@ -201,9 +201,9 @@ ${expenses.slice(-5).reverse().map(exp => {
 
   const handleLogout = () => {
     if (window.confirm('Are you sure you want to logout?')) {
-      localStorage.removeItem('finshield_token');
-      localStorage.removeItem('finshield_user');
-      localStorage.removeItem('finshield_current_view');
+      localStorage.removeItem('expenseiq_token');
+      localStorage.removeItem('expenseiq_user');
+      localStorage.removeItem('expenseiq_current_view');
       setCurrentPage('login');
     }
   };
@@ -267,7 +267,7 @@ ${expenses.slice(-5).reverse().map(exp => {
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `finshield-expenses-${new Date().toISOString().split('T')[0]}.csv`; a.click();
+    a.href = url; a.download = `expenseiq-expenses-${new Date().toISOString().split('T')[0]}.csv`; a.click();
   };
 
   const filteredExpenses = getFilteredExpenses();
@@ -475,7 +475,7 @@ ${expenses.slice(-5).reverse().map(exp => {
               <div className="flex items-center gap-3">
                 <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm"><Shield /></div>
                 <div>
-                  <h3 className="font-bold text-lg">FinShield AI</h3>
+                  <h3 className="font-bold text-lg">ExpenseIQ AI</h3>
                   <p className="text-blue-100 text-xs">Financial Assistant</p>
                 </div>
               </div>

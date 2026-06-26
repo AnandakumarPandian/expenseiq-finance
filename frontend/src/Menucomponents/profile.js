@@ -52,7 +52,7 @@ const ProfilePanel = ({ userData, onClose, onSave }) => {
       email:     form.email,
       phone:     form.phone,
     };
-    localStorage.setItem('finshield_user', JSON.stringify(updated));
+    localStorage.setItem('expenseiq_user', JSON.stringify(updated));
     onSave(updated);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
