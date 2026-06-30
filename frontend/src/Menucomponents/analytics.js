@@ -273,7 +273,7 @@ const Analytics = ({ expenses = [] }) => {
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100">
             <h3 className="text-lg font-semibold text-slate-900">Top 10 Transactions</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Highest individual expenses in period</p>
+            <p className="text-xs text-slate-500 mt-0.5">Highes individual expenses in period</p>
           </div>
           {topSpends.length === 0 ? (
             <div className="p-8 text-center text-slate-500 text-sm">No data available</div>
