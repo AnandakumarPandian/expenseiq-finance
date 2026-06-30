@@ -11,8 +11,28 @@ require("dotenv").config();
 const app = express();
 
 // Enhanced CORS
+//app.use(cors({
+  //origin: ['http://localhost:3000', 'http://localhost:3005', 'http://localhost:3004', 'http://localhost:8080'],
+ // credentials: true,
+ // methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+ // allowedHeaders: ['Content-Type', 'Authorization']
+//}));
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3005',
+  'http://localhost:3004',
+  'http://localhost:8080',
+  'https://expenseiq-finance-psi.vercel.app'
+];
+
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3005', 'http://localhost:3004', 'http://localhost:8080'],
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
