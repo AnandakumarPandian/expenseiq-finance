@@ -1,0 +1,158 @@
+//unction App() {
+ // return (
+   // <div className="min-h-screen bg-blue-500 flex items-center justify-center">
+     // <h1 className="text-4xl font-bold text-white">
+       // Tailwind CSS is Working! 🎉
+      //</h1>
+    //</div>
+  //);
+//}
+
+//export default App;
+import { useState } from "react";
+
+export default function Signup() {
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    repeatEmail: "",
+    password: "",
+    updates: false,
+    terms: false,
+  });
+const API_URL = 'http://localhost:5000/api';
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData({
+      ...formData,
+      [name]: type === "checkbox" ? checked : value,
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (formData.email !== formData.repeatEmail) {
+      alert("Emails do not match");
+      return;
+    }
+
+    if (!formData.terms) {
+      alert("You must accept the Terms & Privacy Policy");
+      return;
+    }
+
+    const res = await fetch("http://localhost:5000/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(formData),
+    });
+
+    const data = await res.json();
+    alert(data.message);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center">
+      {/* Logo */}
+      <div className="absolute top-6 left-6 font-bold text-xl">
+        ExpenseIQ<span className="font-light">FINANCE</span>
+      </div>
+
+      <h1 className="mt-32 text-5xl font-serif font-bold">Sign Up</h1>
+
+      <form
+        onSubmit={handleSubmit}
+        className="mt-12 w-full max-w-md space-y-5"
+      >
+        {/* Name */}
+        <div className="flex gap-4">
+          <div className="w-1/2">
+            <label className="text-sm">First Name</label>
+            <input
+              name="firstName"
+              onChange={handleChange}
+              className="w-full border rounded px-3 py-2"
+            />
+          </div>
+          <div className="w-1/2">
+            <label className="text-sm">Last Name</label>
+            <input
+              name="lastName"
+              onChange={handleChange}
+              className="w-full border rounded px-3 py-2"
+            />
+          </div>
+        </div>
+
+        {/* Email */}
+        <div>
+          <label className="text-sm">E-mail</label>
+          <input
+            type="email"
+            name="email"
+            onChange={handleChange}
+            className="w-full border rounded px-3 py-2"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm">Repeat E-mail</label>
+          <input
+            type="email"
+            name="repeatEmail"
+            onChange={handleChange}
+            className="w-full border rounded px-3 py-2"
+          />
+        </div>
+
+        {/* Password */}
+        <div>
+          <label className="text-sm">Password</label>
+          <input
+            type="password"
+            name="password"
+            onChange={handleChange}
+            className="w-full border rounded px-3 py-2"
+          />
+        </div>
+
+        {/* Checkboxes */}
+        <div className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            name="updates"
+            onChange={handleChange}
+            className="mt-1"
+          />
+          <p className="text-sm">
+            Send me regular updates about my finances and ExpenseIQ.
+          </p>
+        </div>
+
+        <div className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            name="terms"
+            onChange={handleChange}
+            className="mt-1"
+          />
+          <p className="text-sm">
+            I agree with the ExpenseIQ{" "}
+            <span className="text-pink-500">Terms of Service</span> and{" "}
+            <span className="text-pink-500">Privacy Policy</span>.
+          </p>
+        </div>
+
+        {/* Button */}
+        <button
+          type="submit"
+          className="w-full mt-6 bg-pink-200 hover:bg-pink-300 text-white py-3 rounded-full"
+        >
+          SIGN UP
+        </button>
+      </form>
+    </div>
+  );
+}
