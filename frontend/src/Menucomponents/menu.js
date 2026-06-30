@@ -11,6 +11,12 @@ const Download = () => (
   </svg>
 );
 
+const Upload = () => (
+  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l4-4m0 0l4 4m-4-4v12"/>
+  </svg>
+);
+
 const Filter = () => (
   <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
@@ -40,6 +46,10 @@ const ExpensesTracker = ({ setCurrentPage }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterPeriod, setFilterPeriod] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortField, setSortField] = useState('date');
+  const [sortDir, setSortDir] = useState('desc');
+  const [pageSize, setPageSize] = useState(15);
   const [editingId, setEditingId] = useState(null);
   const [currentView, setCurrentView] = useState(
     () => localStorage.getItem('expenseiq_current_view') || 'dashboard'
@@ -63,6 +73,10 @@ const ExpensesTracker = ({ setCurrentPage }) => {
   const chatMessagesEndRef = React.useRef(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importSummary, setImportSummary] = useState(null);
+  const importFileRef = React.useRef(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
 
   const [formData, setFormData] = useState({
     description: '', amount: '', category: 'food',
@@ -82,6 +96,119 @@ const ExpensesTracker = ({ setCurrentPage }) => {
     try { setExpenses(await api.expenses.getAll()); }
     catch (err) { setError('Failed to load expenses. Ensure backend is running.'); setExpenses([]); }
     finally { setLoading(false); }
+  };
+
+  // ── Excel Category Mapping ─────────────────────────────────────────────────
+  // Raw Excel category string is stored directly as `category`.
+  // We only normalise whitespace/casing for the key, keeping the original label intact.
+  const normaliseExcelCategory = (raw) => {
+    if (!raw) return 'Other';
+    return raw.toString().trim(); // preserve original label exactly as-is from Excel
+  };
+
+  // Excel serial date → JS Date string (Excel epoch = Jan 0, 1900)
+  const excelSerialToDateStr = (serial) => {
+    if (!serial || isNaN(serial)) return new Date().toISOString().split('T')[0];
+    // Excel wrongly counts 1900 as a leap year, so subtract 1 extra after Feb 28 1900
+    const utc = (serial - 25569) * 86400 * 1000;
+    const d = new Date(utc);
+    return d.toISOString().split('T')[0];
+  };
+
+  const handleImportExcel = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = ''; // reset so same file can be re-imported
+    setImportLoading(true);
+    setImportSummary(null);
+    setError(null);
+
+    try {
+      // Dynamically load SheetJS from CDN
+      if (!window.XLSX) {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Failed to load SheetJS'));
+          document.head.appendChild(script);
+        });
+      }
+      const XLSX = window.XLSX;
+
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+
+      // Find the expense journal sheet (try common names, else first sheet)
+      const journalSheetName =
+        workbook.SheetNames.find(n => n.toLowerCase().includes('expense') || n.toLowerCase().includes('journal')) ??
+        workbook.SheetNames[0];
+      const sheet = workbook.Sheets[journalSheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+      // Detect column names flexibly
+      const normalise = (s) => s?.toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const sampleRow = rows[0] ?? {};
+      const keys = Object.keys(sampleRow);
+      const findKey = (...candidates) =>
+        keys.find(k => candidates.some(c => normalise(k) === normalise(c))) ?? null;
+
+      const descKey     = findKey('Item', 'Description', 'Name', 'Expense');
+      const amountKey   = findKey('Amount (₹)', 'Amount', 'AmountINR', 'Cost');
+      const categoryKey = findKey('Category', 'Cat');
+      const dateKey     = findKey('Date', 'DateSerial');
+      const notesKey    = findKey('Notes', 'Note', 'Remarks');
+      const dayKey      = findKey('Day');
+      const monthKey    = findKey('Month');
+      const yearKey     = findKey('Year');
+
+      if (!descKey || !amountKey) {
+        throw new Error('Could not find required columns (Item/Amount) in the Excel sheet. Please check the format.');
+      }
+
+      let imported = 0, skipped = 0;
+      const errors = [];
+
+      for (const row of rows) {
+        const description = row[descKey]?.toString().trim();
+        const amount      = parseFloat(row[amountKey]);
+        if (!description || isNaN(amount) || amount <= 0) { skipped++; continue; }
+
+        // Build date: prefer serial Date column, else construct from Day/Month/Year
+        let dateStr;
+        const rawDate = row[dateKey];
+        if (rawDate && !isNaN(rawDate) && Number(rawDate) > 40000) {
+          dateStr = excelSerialToDateStr(Number(rawDate));
+        } else if (dayKey && monthKey && yearKey) {
+          const d = parseInt(row[dayKey]), m = parseInt(row[monthKey]), y = parseInt(row[yearKey]);
+          if (d && m && y) {
+            dateStr = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+          } else {
+            dateStr = new Date().toISOString().split('T')[0];
+          }
+        } else {
+          dateStr = new Date().toISOString().split('T')[0];
+        }
+
+        const category = normaliseExcelCategory(row[categoryKey]);
+        const notes    = notesKey ? row[notesKey]?.toString().trim() : '';
+
+        try {
+          await api.expenses.create({ description, amount, category, date: dateStr, notes: notes || '' });
+          imported++;
+        } catch (err) {
+          errors.push(`Row "${description}": ${err.message}`);
+          skipped++;
+        }
+      }
+
+      await loadExpenses();
+      setImportSummary({ imported, skipped, errors: errors.slice(0, 5), sheet: journalSheetName });
+    } catch (err) {
+      setError(`Import failed: ${err.message}`);
+    } finally {
+      setImportLoading(false);
+    }
   };
 
   // ── Chatbot ────────────────────────────────────────────────────────────────
@@ -235,9 +362,34 @@ ${expenses.slice(-5).reverse().map(exp => {
     finally { setLoading(false); }
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedIds.size} selected transaction${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    setLoading(true);
+    try {
+      await Promise.all([...selectedIds].map(id => api.expenses.delete(id)));
+      setSelectedIds(new Set());
+      await loadExpenses();
+    } catch (err) { setError(err.message || 'Failed to delete selected expenses'); }
+    finally { setLoading(false); }
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
   const getFilteredExpenses = () => {
     let filtered = [...expenses];
-    if (filterCategory !== 'all') filtered = filtered.filter(exp => exp.category === filterCategory);
+    if (filterCategory !== 'all') {
+      filtered = filtered.filter(exp => {
+        const rawCat = (exp.excelCategory?.trim() || exp.category || '').trim();
+        return rawCat === filterCategory;
+      });
+    }
     if (filterPeriod !== 'all') {
       const now = new Date();
       filtered = filtered.filter(exp => {
@@ -251,15 +403,42 @@ ${expenses.slice(-5).reverse().map(exp => {
         }
       });
     }
-    return filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(exp => {
+        const rawCat = (exp.excelCategory?.trim() || exp.category || '').toLowerCase();
+        return (
+          exp.description?.toLowerCase().includes(q) ||
+          exp.notes?.toLowerCase().includes(q) ||
+          rawCat.includes(q) ||
+          exp.amount?.toString().includes(q)
+        );
+      });
+    }
+    return filtered.sort((a, b) => {
+      let aVal, bVal;
+      const aCat = (a.excelCategory?.trim() || a.category || '').toLowerCase();
+      const bCat = (b.excelCategory?.trim() || b.category || '').toLowerCase();
+      switch (sortField) {
+        case 'date':        aVal = new Date(a.date); bVal = new Date(b.date); break;
+        case 'amount':      aVal = a.amount;         bVal = b.amount;         break;
+        case 'description': aVal = a.description?.toLowerCase(); bVal = b.description?.toLowerCase(); break;
+        case 'category':    aVal = aCat.toLowerCase(); bVal = bCat.toLowerCase(); break;
+        default:            aVal = new Date(a.date); bVal = new Date(b.date);
+      }
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
   };
+
 
   const exportToCSV = () => {
     const headers = ['Date', 'Description', 'Category', 'Amount', 'Notes'];
     const rows = filteredExpenses.map(exp => [
       new Date(exp.date).toISOString().split('T')[0],
       exp.description,
-      getCategoryMeta(exp.category).label,
+      exp.excelCategory?.trim() || exp.category,
       exp.amount,
       exp.notes || ''
     ]);
@@ -272,6 +451,69 @@ ${expenses.slice(-5).reverse().map(exp => {
 
   const filteredExpenses = getFilteredExpenses();
   const totalExpenses = filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+
+  // ── Dynamic categories derived from actual expense data ────────────────────
+  const PALETTE = [
+    '#3b82f6','#10b981','#f59e0b','#ec4899','#8b5cf6','#ef4444','#06b6d4',
+    '#f97316','#84cc16','#14b8a6','#a855f7','#e11d48','#0ea5e9','#22c55e',
+    '#fb923c','#d946ef','#64748b','#ca8a04','#0d9488','#7c3aed',
+  ];
+  const dynamicCategories = React.useMemo(() => {
+    const seen = new Map();
+    let paletteIdx = 0;
+    expenses.forEach(exp => {
+      const rawCat = (exp.excelCategory?.trim() || exp.category || '').trim();
+      if (!rawCat) return;
+      const key = rawCat.toLowerCase();
+      if (seen.has(key)) return;
+      // Check if this matches a known built-in category value
+      const known = CATEGORIES.find(c => c.value === rawCat);
+      seen.set(key, {
+        value: rawCat,           // use exact raw string as the filter value
+        label: rawCat,           // display the exact raw label from Excel
+        color: known ? known.color : PALETTE[paletteIdx++ % PALETTE.length],
+        icon: known ? known.icon : '📂',
+      });
+    });
+    return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
+  }, [expenses]);
+
+  const getCatMeta = (exp) => {
+    const rawCat = (exp.excelCategory?.trim() || exp.category || '').trim();
+    const key = rawCat.toLowerCase();
+    return dynamicCategories.find(c => c.value.toLowerCase() === key)
+      ?? { label: rawCat || 'Other', color: '#6b7280', icon: '📂' };
+  };
+  const [page, setPage] = useState(1);
+
+  React.useEffect(() => { setPage(1); }, [filterCategory, filterPeriod, searchQuery, sortField, sortDir, expenses.length, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredExpenses.length / pageSize));
+  const pagedExpenses = filteredExpenses.slice((page - 1) * pageSize, page * pageSize);
+
+  const isPageAllSelected = pagedExpenses.length > 0 && pagedExpenses.every(e => selectedIds.has(e._id));
+  const isPagePartialSelected = pagedExpenses.some(e => selectedIds.has(e._id)) && !isPageAllSelected;
+
+  const togglePageAll = () => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (isPageAllSelected) { pagedExpenses.forEach(e => next.delete(e._id)); }
+      else { pagedExpenses.forEach(e => next.add(e._id)); }
+      return next;
+    });
+  };
+
+  const getPageNumbers = () => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const pages = new Set([1, totalPages, page, page - 1, page + 1].filter(p => p >= 1 && p <= totalPages));
+    const sorted = [...pages].sort((a, b) => a - b);
+    const result = [];
+    for (let i = 0; i < sorted.length; i++) {
+      if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push('...');
+      result.push(sorted[i]);
+    }
+    return result;
+  };
 
   const renderPlaceholderView = (viewName) => (
     <div className="flex items-center justify-center h-96">
@@ -302,8 +544,27 @@ ${expenses.slice(-5).reverse().map(exp => {
         </div>
       )}
 
+      {/* Import Summary Toast */}
+      {importSummary && (
+        <div className="fixed top-4 right-4 z-50 bg-white border-l-4 border-emerald-500 px-6 py-4 rounded-lg shadow-xl flex items-start gap-3 max-w-md">
+          <div className="flex-1">
+            <p className="font-semibold text-slate-900">Import Complete</p>
+            <p className="text-sm text-slate-600">
+              ✅ {importSummary.imported} transactions imported from <em>{importSummary.sheet}</em>
+              {importSummary.skipped > 0 && `, ${importSummary.skipped} skipped`}
+            </p>
+            {importSummary.errors.length > 0 && (
+              <ul className="mt-1 text-xs text-red-500 list-disc list-inside">
+                {importSummary.errors.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            )}
+          </div>
+          <button onClick={() => setImportSummary(null)} className="text-slate-400 hover:text-slate-600"><X /></button>
+        </div>
+      )}
+
       {/* Page Views */}
-      {currentView === 'dashboard' && <Dashboard expenses={expenses} />}
+      {currentView === 'dashboard' && <Dashboard expenses={expenses} dynamicCategories={dynamicCategories} getCatMeta={getCatMeta} />}
       {currentView === 'analytics' && <Analytics expenses={expenses} />}
       {currentView === 'budgets'   && <Budget expenses={expenses} />}
       {currentView === 'cards'     && renderPlaceholderView('Cards')}
@@ -342,34 +603,110 @@ ${expenses.slice(-5).reverse().map(exp => {
           </div>
 
           {/* Controls */}
-          <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
-            <div className="flex flex-wrap gap-4 items-center justify-between">
-              <div className="flex flex-wrap gap-3">
-                <div className="flex items-center gap-2">
-                  <Filter />
-                  <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent">
-                    <option value="all">All Categories</option>
-                    {CATEGORIES.map(cat => <option key={cat.value} value={cat.value}>{cat.icon} {cat.label}</option>)}
-                  </select>
-                </div>
-                <select value={filterPeriod} onChange={(e) => setFilterPeriod(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            {/* Top row: search + actions */}
+            <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap gap-3 items-center justify-between">
+              {/* Search */}
+              <div className="relative flex-1 min-w-[200px] max-w-sm">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                </span>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search description, category, amount..."
+                  className="w-full pl-9 pr-9 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                )}
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-2 flex-shrink-0">
+                <input ref={importFileRef} type="file" accept=".xlsx,.xls" onChange={handleImportExcel} style={{ display: 'none' }} />
+                <button onClick={() => importFileRef.current?.click()} disabled={importLoading}
+                  className="flex items-center gap-1.5 bg-white border border-slate-300 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50">
+                  {importLoading ? <><span className="animate-spin inline-block"><Refresh /></span> Importing...</> : <><Upload /> Import Excel</>}
+                </button>
+                <button onClick={exportToCSV} disabled={filteredExpenses.length === 0}
+                  className="flex items-center gap-1.5 bg-white border border-slate-300 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  <Download /> Export CSV
+                </button>
+                <button onClick={() => { setShowAddForm(!showAddForm); setEditingId(null); setFormData({ description: '', amount: '', category: 'food', date: new Date().toISOString().split('T')[0], notes: '' }); }}
+                  className="flex items-center gap-1.5 bg-slate-900 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors">
+                  <Plus /> Add Expense
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom row: filters + sort + page size */}
+            <div className="px-6 py-3 bg-slate-50 flex flex-wrap gap-3 items-center">
+              {/* Category filter pills */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider mr-1">Category</span>
+                <button
+                  onClick={() => setFilterCategory('all')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${filterCategory === 'all' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}
+                >All</button>
+                {dynamicCategories.map(cat => (
+                  <button key={cat.value} onClick={() => setFilterCategory(cat.value)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border flex items-center gap-1 ${filterCategory === cat.value ? 'text-white border-transparent' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}
+                    style={filterCategory === cat.value ? { backgroundColor: cat.color, borderColor: cat.color } : {}}
+                  >
+                    <span>{cat.icon}</span>{cat.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+                {/* Period filter */}
+                <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)}
+                  className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-slate-900">
                   <option value="all">All Time</option>
                   <option value="today">Today</option>
                   <option value="week">This Week</option>
                   <option value="month">This Month</option>
                   <option value="year">This Year</option>
                 </select>
-              </div>
-              <div className="flex gap-3">
-                <button onClick={exportToCSV} disabled={filteredExpenses.length === 0} className="flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                  <Download /> Export CSV
-                </button>
-                <button
-                  onClick={() => { setShowAddForm(!showAddForm); setEditingId(null); setFormData({ description: '', amount: '', category: 'food', date: new Date().toISOString().split('T')[0], notes: '' }); }}
-                  className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
-                >
-                  <Plus /> Add Expense
-                </button>
+
+                {/* Sort */}
+                <select value={`${sortField}:${sortDir}`} onChange={e => { const [f, d] = e.target.value.split(':'); setSortField(f); setSortDir(d); }}
+                  className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-slate-900">
+                  <option value="date:desc">Date ↓ Newest</option>
+                  <option value="date:asc">Date ↑ Oldest</option>
+                  <option value="amount:desc">Amount ↓ High</option>
+                  <option value="amount:asc">Amount ↑ Low</option>
+                  <option value="description:asc">Name A→Z</option>
+                  <option value="description:desc">Name Z→A</option>
+                  <option value="category:asc">Category A→Z</option>
+                </select>
+
+                {/* Page size */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-slate-500 whitespace-nowrap">Show</span>
+                  <select value={pageSize} onChange={e => setPageSize(Number(e.target.value))}
+                    className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 w-20">
+                    <option value={10}>10</option>
+                    <option value={15}>15</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  <span className="text-xs text-slate-500">/ page</span>
+                </div>
+
+                {/* Active filter count badge */}
+                {(filterCategory !== 'all' || filterPeriod !== 'all' || searchQuery) && (
+                  <button onClick={() => { setFilterCategory('all'); setFilterPeriod('all'); setSearchQuery(''); }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors whitespace-nowrap">
+                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    Clear filters
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -382,7 +719,7 @@ ${expenses.slice(-5).reverse().map(exp => {
                 <input type="text" placeholder="Description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent" />
                 <input type="number" step="0.01" placeholder="Amount (₹)" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} className="border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent" />
                 <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} className="border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent">
-                  {CATEGORIES.map(cat => <option key={cat.value} value={cat.value}>{cat.icon} {cat.label}</option>)}
+                  {dynamicCategories.map(cat => <option key={cat.value} value={cat.value}>{cat.icon} {cat.label}</option>)}
                 </select>
                 <input type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} className="border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent" />
                 <input type="text" placeholder="Notes (optional)" value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} className="border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent md:col-span-2" />
@@ -400,8 +737,25 @@ ${expenses.slice(-5).reverse().map(exp => {
 
           {/* Expenses Table */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">Transaction History</h3>
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-semibold text-slate-900">Transaction History</h3>
+                {selectedIds.size > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {selectedIds.size} selected
+                    </span>
+                    <button onClick={handleBulkDelete} disabled={loading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                      <Trash /> Delete Selected
+                    </button>
+                    <button onClick={() => setSelectedIds(new Set())}
+                      className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
+                      Clear
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="overflow-x-auto">
               {loading && expenses.length === 0 ? (
@@ -419,18 +773,50 @@ ${expenses.slice(-5).reverse().map(exp => {
                 <table className="w-full">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
-                      <th className="text-left px-6 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Date</th>
-                      <th className="text-left px-6 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Description</th>
-                      <th className="text-left px-6 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Category</th>
-                      <th className="text-right px-6 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Amount</th>
+                      <th className="px-4 py-3 w-10">
+                        <input
+                          type="checkbox"
+                          checked={isPageAllSelected}
+                          ref={el => { if (el) el.indeterminate = isPagePartialSelected; }}
+                          onChange={togglePageAll}
+                          className="w-4 h-4 rounded border-slate-300 text-slate-900 cursor-pointer accent-slate-900"
+                        />
+                      </th>
+                      {[
+                        { key: 'date',        label: 'Date',        align: 'left'  },
+                        { key: 'description', label: 'Description', align: 'left'  },
+                        { key: 'category',    label: 'Category',    align: 'left'  },
+                        { key: 'amount',      label: 'Amount',      align: 'right' },
+                      ].map(col => (
+                        <th key={col.key}
+                          onClick={() => { if (sortField === col.key) { setSortDir(d => d === 'asc' ? 'desc' : 'asc'); } else { setSortField(col.key); setSortDir('asc'); } }}
+                          className={`px-6 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider cursor-pointer select-none hover:bg-slate-100 transition-colors ${col.align === 'right' ? 'text-right' : 'text-left'}`}
+                        >
+                          <span className="inline-flex items-center gap-1">
+                            {col.label}
+                            {sortField === col.key
+                              ? <span className="text-slate-900">{sortDir === 'asc' ? '↑' : '↓'}</span>
+                              : <span className="text-slate-300">↕</span>}
+                          </span>
+                        </th>
+                      ))}
                       <th className="text-right px-6 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
-                    {filteredExpenses.map((expense) => {
-                      const cat = getCategoryMeta(expense.category);
+                    {pagedExpenses.map((expense) => {
+                      const cat = getCatMeta(expense);
+                      const isSelected = selectedIds.has(expense._id);
                       return (
-                        <tr key={expense._id} className="hover:bg-slate-50 transition-colors">
+                        <tr key={expense._id} className={`hover:bg-slate-50 transition-colors ${isSelected ? 'bg-blue-50 hover:bg-blue-50' : ''}`}>
+                          <td className="px-4 py-4">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelect(expense._id)}
+                              className="w-4 h-4 rounded border-slate-300 cursor-pointer accent-slate-900"
+                            />
+                          </td>
                           <td className="px-6 py-4 text-sm text-slate-900">{new Date(expense.date).toLocaleDateString('en-IN')}</td>
                           <td className="px-6 py-4">
                             <div className="text-sm font-medium text-slate-900">{expense.description}</div>
@@ -455,6 +841,42 @@ ${expenses.slice(-5).reverse().map(exp => {
                 </table>
               )}
             </div>
+
+            {/* Pagination Footer */}
+            {filteredExpenses.length > 0 && (
+              <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between flex-wrap gap-3">
+                <span className="text-sm text-slate-500">
+                  Showing <span className="font-semibold text-slate-900">{(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filteredExpenses.length)}</span> of <span className="font-semibold text-slate-900">{filteredExpenses.length}</span> transactions
+                  {(filterCategory !== 'all' || filterPeriod !== 'all' || searchQuery) && expenses.length !== filteredExpenses.length && (
+                    <span className="text-slate-400"> (filtered from {expenses.length})</span>
+                  )}
+                </span>
+
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setPage(1)} disabled={page === 1}
+                      className="px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors" title="First page">«</button>
+                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                      className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                      <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"/></svg> Prev
+                    </button>
+                    {getPageNumbers().map((p, i) =>
+                      p === '...'
+                        ? <span key={`e-${i}`} className="px-2 text-slate-400 text-sm select-none">…</span>
+                        : <button key={p} onClick={() => setPage(p)}
+                            className={`min-w-[36px] h-9 px-2 text-sm font-medium rounded-lg transition-colors ${page === p ? 'bg-slate-900 text-white' : 'text-slate-700 bg-white border border-slate-300 hover:bg-slate-50'}`}
+                          >{p}</button>
+                    )}
+                    <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                      className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                      Next <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
+                    </button>
+                    <button onClick={() => setPage(totalPages)} disabled={page === totalPages}
+                      className="px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors" title="Last page">»</button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -68,8 +68,13 @@ const ExpenseSchema = new mongoose.Schema({
   category: { 
     type: String, 
     required: true,
-    enum: ['food', 'transport', 'utilities', 'entertainment', 'healthcare', 'shopping', 'education', 'other'],
+    trim: true,
     default: 'other'
+  },
+  excelCategory: {
+    type: String,
+    trim: true,
+    default: ''
   },
   date: { 
     type: Date, 
@@ -106,7 +111,13 @@ const BudgetSchema = new mongoose.Schema({
   category: {
     type: String,
     required: true,
-    enum: ['food', 'transport', 'utilities', 'entertainment', 'healthcare', 'shopping', 'education', 'other']
+    trim: true,
+    default: 'other'
+  },
+  categoryLabel: {
+    type: String,
+    trim: true,
+    default: ''
   },
   amount: {
     type: Number,
@@ -212,7 +223,7 @@ app.get('/api/expenses/:id', authenticateToken, async (req, res) => {
 // Create new expense
 app.post('/api/expenses', authenticateToken, async (req, res) => {
   try {
-    const { description, amount, category, date, notes } = req.body;
+    const { description, amount, category, date, notes, excelCategory } = req.body;
 
     // Validation
     if (!description || !amount || !category || !date) {
@@ -234,6 +245,7 @@ app.post('/api/expenses', authenticateToken, async (req, res) => {
       description,
       amount: parseFloat(amount),
       category,
+      excelCategory: excelCategory || '',
       date: new Date(date),
       notes: notes || ''
     });
@@ -252,7 +264,7 @@ app.post('/api/expenses', authenticateToken, async (req, res) => {
 // Update expense
 app.put('/api/expenses/:id', authenticateToken, async (req, res) => {
   try {
-    const { description, amount, category, date, notes } = req.body;
+    const { description, amount, category, date, notes, excelCategory } = req.body;
 
     // Find and verify ownership
     const expense = await Expense.findOne({
@@ -279,6 +291,7 @@ app.put('/api/expenses/:id', authenticateToken, async (req, res) => {
       expense.amount = parseFloat(amount);
     }
     if (category !== undefined) expense.category = category;
+    if (excelCategory !== undefined) expense.excelCategory = excelCategory;
     if (date !== undefined) expense.date = new Date(date);
     if (notes !== undefined) expense.notes = notes;
 
@@ -396,7 +409,7 @@ app.get('/api/budgets', authenticateToken, async (req, res) => {
 // Create new budget
 app.post('/api/budgets', authenticateToken, async (req, res) => {
   try {
-    const { category, amount, period } = req.body;
+    const { category, categoryLabel, amount, period } = req.body;
 
     if (!category || !amount || !period) {
       return res.status(400).json({
@@ -415,6 +428,7 @@ app.post('/api/budgets', authenticateToken, async (req, res) => {
     const budget = await Budget.create({
       userId: req.user.userId,
       category,
+      categoryLabel: categoryLabel || '',
       amount: parseFloat(amount),
       period
     });
@@ -433,7 +447,7 @@ app.post('/api/budgets', authenticateToken, async (req, res) => {
 // Update budget
 app.put('/api/budgets/:id', authenticateToken, async (req, res) => {
   try {
-    const { category, amount, period } = req.body;
+    const { category, categoryLabel, amount, period } = req.body;
 
     const budget = await Budget.findOne({
       _id: req.params.id,
@@ -448,6 +462,7 @@ app.put('/api/budgets/:id', authenticateToken, async (req, res) => {
     }
 
     if (category !== undefined) budget.category = category;
+    if (categoryLabel !== undefined) budget.categoryLabel = categoryLabel;
     if (amount !== undefined) {
       if (amount <= 0) {
         return res.status(400).json({
