@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 
-const API_URL = 'http://localhost:8000/api';
+//const API_URL = 'http://localhost:8000/api';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 const OAUTH_CONFIG = {
   GOOGLE_CLIENT_ID: '690088442110-jr21uvljkid15s3tjfqqlk572p4r9g22.apps.googleusercontent.com',
